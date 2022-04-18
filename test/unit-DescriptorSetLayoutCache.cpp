@@ -16,23 +16,23 @@ SCENARIO( " Scenario 1: Create a DescriptorSetLayout" )
     auto e = window->getSwapchainExtent();
     (void)e;
 
-    gvu::DescriptorSetLayoutCache cache;
+    using CacheType = gvu::DescriptorSetLayoutCache;
+
+    CacheType  cache;
     cache.init(window->getDevice());
 
-    gvu::DescriptorSetLayoutCreateInfo ci;
+    CacheType::createInfo_type ci;
     ci.bindings.emplace_back(VkDescriptorSetLayoutBinding{0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3, VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,nullptr});
 
 
     auto layout = cache.create(ci);
-
     auto layout2 = cache.create(ci);
 
     REQUIRE(layout == layout2);
 
 
-    gvu::DescriptorSetLayoutCreateInfo ci2;
-    ci.bindings.emplace_back(VkDescriptorSetLayoutBinding{0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3, VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,nullptr});
-    ci.bindings.emplace_back(VkDescriptorSetLayoutBinding{1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,nullptr});
+    auto ci2 = ci;
+    ci2.bindings.emplace_back(VkDescriptorSetLayoutBinding{1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,nullptr});
     auto layout3 = cache.create(ci2);
 
     REQUIRE(layout != layout3);
