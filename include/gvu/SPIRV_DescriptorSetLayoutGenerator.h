@@ -36,41 +36,41 @@ struct CombinedPipelineLayoutCreateInfo
 };
 
 /**
- * @brief The SPIRV_DescriptorSetLayoutGenerator struct
+ * @brief The spirvPipelineReflector struct
  *
- * This class reads a set of SPIRV code and
- * creates the descriptorSetLayoutBindings for you.
+ * The spirvPipelineReflector allows you to add SPIRV code to it
+ * and then use it to generate pipeline layouts.
  *
-    G.addSPIRVCode( V_shaderCode, vk::ShaderStageFlagBits::eVertex);
-    G.addSPIRVCode( F_shaderCode, vk::ShaderStageFlagBits::eFragment);
-
-    G.generate([](std::map< uint32_t, std::vector<vk::DescriptorSetLayoutBinding> > & D)
-    {
-        for(auto & d : D)
-        {
-            std::cout << "Set: " << d.first << std::endl;
-
-            // each d.second is is a vector of descriptorSetLayoutBindings for set: d.first
-            for(auto & e : d.second)
-            {
-                std::cout << fmt::format("   Binding {}  Count: {}   Type: {}  Stage: {} ", e.binding, e.descriptorCount, to_string(e.descriptorType), to_string(e.stageFlags)) << std::endl;
-            }
-        }
-    });
+ * It also allows you to query variables inside the shaders
  */
-struct SPIRV_DescriptorSetLayoutGenerator
+struct spirvPipelineReflector
 {
     struct AttributeInfo
     {
-        uint32_t   location;
+        uint32_t    location;
         std::string name;
-        VkFormat format;
+        VkFormat    format;
     };
-
+    struct UniformBufferInfo
+    {
+        uint32_t    set;
+        uint32_t    binding;
+        std::string name;
+    };
+    struct ImageInfo
+    {
+        uint32_t    set;
+        uint32_t    binding;
+        uint32_t    arraySize;
+        std::string name;
+    };
     struct ShaderStageInfo
     {
         std::vector< AttributeInfo > inputAttributes;
         std::vector< AttributeInfo > outputAttributes;
+        std::vector< UniformBufferInfo > uniformBuffers;
+        std::vector< UniformBufferInfo > storageBuffers;
+        std::vector< ImageInfo > imageSamplers;
     };
 
     ShaderStageInfo vertex;
@@ -135,6 +135,16 @@ struct SPIRV_DescriptorSetLayoutGenerator
 
         spirv_cross::ShaderResources resources = comp.get_shader_resources();
 
+        ShaderStageInfo * pStage = nullptr;
+        if(stage == VK_SHADER_STAGE_VERTEX_BIT)
+        {
+            pStage = &vertex;
+        }
+        if(stage == VK_SHADER_STAGE_FRAGMENT_BIT)
+        {
+            pStage = &fragment;
+        }
+
         auto _handleDescriptorType = [&](spirv_cross::SmallVector<spirv_cross::Resource> & desc, VkDescriptorType _type)
         {
             for (auto &u : desc)
@@ -148,9 +158,32 @@ struct SPIRV_DescriptorSetLayoutGenerator
                 bind.descriptorCount = std::max(1u, arraySize);
                 bind.descriptorType  = _type;
                 bind.stageFlags     |= static_cast<VkShaderStageFlags>(stage);
-            }
 
+                if( _type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
+                {
+                    auto &ub = pStage->uniformBuffers.emplace_back();
+                    ub.name = u.name;
+                    ub.set = set;
+                    ub.binding = binding;
+                }
+                if( _type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+                {
+                    auto &ub = pStage->storageBuffers.emplace_back();
+                    ub.name = u.name;
+                    ub.set = set;
+                    ub.binding = binding;
+                }
+                if( _type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+                {
+                    auto &ub = pStage->imageSamplers.emplace_back();
+                    ub.name = u.name;
+                    ub.set = set;
+                    ub.arraySize = arraySize;
+                    ub.binding = binding;
+                }
+            }
         };
+
         _handleDescriptorType(resources.uniform_buffers,   VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER         );//vk::DescriptorType::eUniformBuffer);
         _handleDescriptorType(resources.storage_buffers,   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER         );//vk::DescriptorType::eStorageBuffer);
         _handleDescriptorType(resources.sampled_images,    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER );//vk::DescriptorType::eCombinedImageSampler);
@@ -220,23 +253,6 @@ struct SPIRV_DescriptorSetLayoutGenerator
         //========
     }
 
-    template<typename Callable_t>
-    void generate(Callable_t && C)
-    {
-        std::map< uint32_t, std::vector<VkDescriptorSetLayoutBinding> > setBind;
-
-        for(auto & S : setBindings)
-        {
-            auto & binding = setBind[ S.first];//.emplace_back();
-            for(auto & b  : S.second)
-            {
-                binding.push_back(b.second);
-            }
-        }
-
-        C(setBind);
-    }
-
     static VkFormat _getFormat(spirv_cross::SPIRType::BaseType baseType, uint32_t vecSize)
     {
         switch(baseType)
@@ -299,7 +315,7 @@ protected:
     std::vector<VkPushConstantRange> m_pushRangeV;
 };
 
-
+#if 0
 struct SPIRV_PipelineReflector
 {
     struct
@@ -652,7 +668,7 @@ struct SPIRV_PipelineReflector
     }
 
 };
-
+#endif
 }
 
 #endif

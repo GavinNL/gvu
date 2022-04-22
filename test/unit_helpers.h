@@ -47,7 +47,7 @@ std::shared_ptr<vkw::VKWVulkanWindow> createWindow(uint32_t width, uint32_t heig
     // 2. Create the Instance
     vkw::VKWVulkanWindow::InstanceInitilizationInfo2 instanceInfo;
     instanceInfo.debugCallback = &VulkanReportFunc;
-    instanceInfo.vulkanVersion = VK_MAKE_VERSION(1, 0, 0);
+    instanceInfo.vulkanVersion = VK_MAKE_VERSION(1, 2, 0);
     instanceInfo.enabledExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 
     window->createVulkanInstance(instanceInfo);

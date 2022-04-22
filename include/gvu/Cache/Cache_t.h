@@ -44,6 +44,10 @@ class Cache_t
             return _create(info);
         }
 
+        size_t cacheSize() const
+        {
+            return m_cache.size();
+        }
         /**
          * @brief getLayoutInfo
          * @param l
