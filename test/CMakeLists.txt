@@ -47,6 +47,7 @@ foreach(file ${files})
                                 PUBLIC 
                                     ${PROJECT_NAME}-catchmain 
                                  #   ${PROJECT_NAME}::warnings
+                                    -lstdc++fs
                                     CONAN_PKG::sdl
                                     CONAN_PKG::fmt
                                     Vulkan::Vulkan
