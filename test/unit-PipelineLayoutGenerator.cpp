@@ -6,7 +6,7 @@
 #include <gvu/Cache/DescriptorSetLayoutCache.h>
 #include <gvu/Cache/PipelineLayoutCache.h>
 #include <gvu/GraphicsPipelineCreateInfo.h>
-#include <gvu/SPIRV_DescriptorSetLayoutGenerator.h>
+#include <gvu/spirvPipelineReflector.h>
 
 
 SCENARIO( " Scenario 1: Create a Sampler" )
