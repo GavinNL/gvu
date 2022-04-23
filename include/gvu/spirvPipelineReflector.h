@@ -19,8 +19,16 @@ struct CombinedPipelineLayoutCreateInfo
     std::vector<DescriptorSetLayoutCreateInfo> setLayoutInfos;
     std::vector<VkPushConstantRange>           pushConstantRanges;
 
-    VkPipelineLayout create(PipelineLayoutCache & plCache,
-                DescriptorSetLayoutCache & slCache)
+    /**
+     * @brief create
+     * @param plCache
+     * @param slCache
+     * @return
+     *
+     * Create the pipeline layout by passing the pipelinelayout and descriptorsetlayout caches
+     *
+     */
+    VkPipelineLayout create(PipelineLayoutCache & plCache, DescriptorSetLayoutCache & slCache)
     {
         PipelineLayoutCreateInfo PLC;
 
@@ -32,6 +40,41 @@ struct CombinedPipelineLayoutCreateInfo
         PLC.pushConstantRanges = pushConstantRanges;
 
         return plCache.create(PLC);
+    }
+
+    /**
+     * @brief _fixRanges
+     *
+     * Sorts the pushConstantRanges by stage and then combined any consecutive blocks
+     */
+    void _fixRanges()
+    {
+        std::sort(pushConstantRanges.begin(), pushConstantRanges.end(),[](auto &a, auto & b)
+        {
+            return std::tie(a.stageFlags,a.offset) < std::tie(b.stageFlags,b.offset);
+        });
+        for(size_t i=0;i<pushConstantRanges.size();i++)
+        {
+            uint32_t count=0;
+            for(size_t j=i+1;j<pushConstantRanges.size();j++)
+            {
+                if(pushConstantRanges[i].stageFlags == pushConstantRanges[j].stageFlags)
+                {
+                    pushConstantRanges[i].size += pushConstantRanges[j].size;
+                    pushConstantRanges[j].size=0;
+                    count++;
+                }
+                else
+                {
+                    break;
+                }
+            }
+            i += count;
+        }
+        pushConstantRanges.erase(std::remove_if(pushConstantRanges.begin(), pushConstantRanges.end(),[](auto &a)
+        {
+            return a.size==0;
+        }), pushConstantRanges.end());
     }
 };
 
@@ -55,6 +98,7 @@ struct spirvPipelineReflector
     {
         uint32_t    set;
         uint32_t    binding;
+        uint32_t    arraySize;
         std::string name;
     };
     struct ImageInfo
@@ -159,27 +203,32 @@ struct spirvPipelineReflector
                 bind.descriptorType  = _type;
                 bind.stageFlags     |= static_cast<VkShaderStageFlags>(stage);
 
-                if( _type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
+                if(pStage)
                 {
-                    auto &ub = pStage->uniformBuffers.emplace_back();
-                    ub.name = u.name;
-                    ub.set = set;
-                    ub.binding = binding;
-                }
-                if( _type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
-                {
-                    auto &ub = pStage->storageBuffers.emplace_back();
-                    ub.name = u.name;
-                    ub.set = set;
-                    ub.binding = binding;
-                }
-                if( _type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
-                {
-                    auto &ub = pStage->imageSamplers.emplace_back();
-                    ub.name = u.name;
-                    ub.set = set;
-                    ub.arraySize = arraySize;
-                    ub.binding = binding;
+                    if( _type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
+                    {
+                        auto &ub = pStage->uniformBuffers.emplace_back();
+                        ub.name = u.name;
+                        ub.set = set;
+                        ub.arraySize = arraySize;
+                        ub.binding = binding;
+                    }
+                    if( _type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+                    {
+                        auto &ub = pStage->storageBuffers.emplace_back();
+                        ub.name = u.name;
+                        ub.set = set;
+                        ub.arraySize = arraySize;
+                        ub.binding = binding;
+                    }
+                    if( _type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+                    {
+                        auto &ub = pStage->imageSamplers.emplace_back();
+                        ub.name = u.name;
+                        ub.set = set;
+                        ub.arraySize = arraySize;
+                        ub.binding = binding;
+                    }
                 }
             }
         };
@@ -242,14 +291,11 @@ struct spirvPipelineReflector
             }
         };
 
-        if(stage == VK_SHADER_STAGE_VERTEX_BIT)
+        if(pStage)
         {
-            xx(vertex);
+            xx(*pStage);
         }
-        if(stage == VK_SHADER_STAGE_FRAGMENT_BIT)
-        {
-            xx(fragment);
-        }
+
         //========
     }
 
