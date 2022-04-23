@@ -94,30 +94,28 @@ struct spirvPipelineReflector
         std::string name;
         VkFormat    format;
     };
-    struct UniformBufferInfo
+
+    struct DescriptorInfo
     {
         uint32_t    set;
         uint32_t    binding;
         uint32_t    arraySize;
         std::string name;
     };
-    struct ImageInfo
-    {
-        uint32_t    set;
-        uint32_t    binding;
-        uint32_t    arraySize;
-        std::string name;
-    };
+
     struct ShaderStageInfo
     {
         std::vector< AttributeInfo > inputAttributes;
         std::vector< AttributeInfo > outputAttributes;
-        std::vector< UniformBufferInfo > uniformBuffers;
-        std::vector< UniformBufferInfo > storageBuffers;
-        std::vector< ImageInfo > imageSamplers;
+        std::vector< DescriptorInfo > uniformBuffers;
+        std::vector< DescriptorInfo > storageBuffers;
+        std::vector< DescriptorInfo > imageSamplers;
     };
 
     ShaderStageInfo vertex;
+    ShaderStageInfo tessControl;
+    ShaderStageInfo tessEval;
+    ShaderStageInfo geometry;
     ShaderStageInfo fragment;
 
     /**
@@ -141,33 +139,7 @@ struct spirvPipelineReflector
             }
         }
         M.pushConstantRanges = m_pushRangeV;
-        std::sort(M.pushConstantRanges.begin(), M.pushConstantRanges.end(),[](auto &a, auto & b)
-        {
-            return std::tie(a.stageFlags,a.offset) < std::tie(b.stageFlags,b.offset);
-        });
-        for(size_t i=0;i<M.pushConstantRanges.size();i++)
-        {
-            uint32_t count=0;
-            for(size_t j=i+1;j<M.pushConstantRanges.size();j++)
-            {
-                if(M.pushConstantRanges[i].stageFlags == M.pushConstantRanges[j].stageFlags)
-                {
-                    M.pushConstantRanges[i].size += M.pushConstantRanges[j].size;
-                    M.pushConstantRanges[j].size=0;
-                    count++;
-                }
-                else
-                {
-                    break;
-                }
-            }
-            i += count;
-        }
-        M.pushConstantRanges.erase(std::remove_if(M.pushConstantRanges.begin(), M.pushConstantRanges.end(),[](auto &a)
-        {
-            return a.size==0;
-        }), M.pushConstantRanges.end());
-
+        M._fixRanges();
         return M;
     }
 
@@ -188,7 +160,18 @@ struct spirvPipelineReflector
         {
             pStage = &fragment;
         }
-
+        if(stage == VK_SHADER_STAGE_GEOMETRY_BIT)
+        {
+            pStage = &geometry;
+        }
+        if(stage == VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT)
+        {
+            pStage = &tessControl;
+        }
+        if(stage == VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT)
+        {
+            pStage = &tessEval;
+        }
         auto _handleDescriptorType = [&](spirv_cross::SmallVector<spirv_cross::Resource> & desc, VkDescriptorType _type)
         {
             for (auto &u : desc)
