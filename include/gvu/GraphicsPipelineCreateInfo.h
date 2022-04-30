@@ -302,6 +302,7 @@ struct GraphicsPipelineCreateInfo
             a.location = locationBaseIndex + i;
             offset    += getFormatInfo(f).blockSizeInBits / 8;
             inputVertexAttributes.push_back(a);
+            i++;
         }
         auto & b = inputBindings.emplace_back();
         b.stride = offset;
