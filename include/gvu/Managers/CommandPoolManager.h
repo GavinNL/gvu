@@ -118,6 +118,8 @@ struct CommandBuffer
         imageMemoryBarrier.oldLayout        = oldLayout;
         imageMemoryBarrier.newLayout        = newLayout;
         imageMemoryBarrier.srcAccessMask    = 0;
+        imageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        imageMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         imageMemoryBarrier.dstAccessMask    = VK_ACCESS_TRANSFER_WRITE_BIT;
         imageMemoryBarrier.image            = image;
         imageMemoryBarrier.subresourceRange = subresourceRange;
