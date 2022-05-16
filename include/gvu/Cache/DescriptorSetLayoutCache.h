@@ -55,6 +55,7 @@ struct DescriptorSetLayoutCreateInfo
     }
 
     DescriptorSetLayoutCreateInfo() = default;
+
     DescriptorSetLayoutCreateInfo(VkDescriptorSetLayoutCreateInfo const & info)
     {
         flags = info.flags;
@@ -88,6 +89,7 @@ struct DescriptorSetLayoutCreateInfo
             return VK_NULL_HANDLE;
         return obj;
     }
+
     static void destroy(VkDevice device, object_type c)
     {
         vkDestroyDescriptorSetLayout(device, c, nullptr);

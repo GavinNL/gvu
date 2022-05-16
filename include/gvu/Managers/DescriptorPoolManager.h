@@ -255,6 +255,57 @@ protected:
     VkDescriptorPoolCreateInfo        m_createInfo = {};
 };
 
+class DescriptorSetAllocator
+{
+public:
+    void init(DescriptorSetLayoutCache * cache)
+    {
+        m_cache = cache;
+    }
+    void destroy()
+    {
+        for(auto & [l, p] : m_pools)
+        {
+            p->destroy();
+        }
+        m_pools.clear();
+    }
+    void allocate(DescriptorSetLayoutCreateInfo const &ci)
+    {
+        auto l = m_cache->create(ci);
+    }
+
+    VkDescriptorSet allocate(VkDescriptorSetLayout layout)
+    {
+        auto i = m_pools.find(layout);
+        if(i == m_pools.end())
+        {
+            auto p = std::make_shared<DescriptorPoolManager>();
+            p->init(m_cache->getDevice(), m_cache, layout, 10);
+            m_pools[layout] = p;
+            return allocate(layout);
+        }
+        else
+        {
+            auto set =  i->second->allocateDescriptorSet();
+            m_setToLayout[set] = layout;
+            return set;
+        }
+    }
+
+    void releaseToPool(VkDescriptorSet set)
+    {
+        auto l = m_setToLayout.at(set);
+        m_pools.at(l)->releaseToPool(set);
+    }
+
+protected:
+
+    DescriptorSetLayoutCache * m_cache;
+    std::unordered_map<VkDescriptorSetLayout, std::shared_ptr<DescriptorPoolManager> > m_pools;
+    std::unordered_map<VkDescriptorSet, VkDescriptorSetLayout> m_setToLayout;
+};
+
 }
 
 #endif

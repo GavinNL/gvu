@@ -68,6 +68,10 @@ class Cache_t
             throw std::out_of_range("This object was not created in this cache");
         }
 
+        VkDevice getDevice() const
+        {
+            return m_device;
+        }
     private:
         object_type _create(createInfo_type const & info)
         {
