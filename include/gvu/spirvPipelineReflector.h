@@ -110,6 +110,7 @@ struct spirvPipelineReflector
         std::vector< DescriptorInfo > uniformBuffers;
         std::vector< DescriptorInfo > storageBuffers;
         std::vector< DescriptorInfo > imageSamplers;
+        std::vector< DescriptorInfo > storageImage;
     };
 
     ShaderStageInfo vertex;
@@ -117,6 +118,7 @@ struct spirvPipelineReflector
     ShaderStageInfo tessEval;
     ShaderStageInfo geometry;
     ShaderStageInfo fragment;
+    ShaderStageInfo compute;
 
     /**
      * @brief generateDescriptorSetCreateInfos
@@ -172,6 +174,10 @@ struct spirvPipelineReflector
         {
             pStage = &tessEval;
         }
+        if(stage == VK_SHADER_STAGE_COMPUTE_BIT)
+        {
+            pStage = &compute;
+        }
         auto _handleDescriptorType = [&](spirv_cross::SmallVector<spirv_cross::Resource> & desc, VkDescriptorType _type)
         {
             for (auto &u : desc)
@@ -207,6 +213,14 @@ struct spirvPipelineReflector
                     if( _type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
                     {
                         auto &ub = pStage->imageSamplers.emplace_back();
+                        ub.name = u.name;
+                        ub.set = set;
+                        ub.arraySize = arraySize;
+                        ub.binding = binding;
+                    }
+                    if( _type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
+                    {
+                        auto &ub = pStage->storageImage.emplace_back();
                         ub.name = u.name;
                         ub.set = set;
                         ub.arraySize = arraySize;

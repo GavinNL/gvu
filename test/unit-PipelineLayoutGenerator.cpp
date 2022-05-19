@@ -77,3 +77,55 @@ SCENARIO( " Scenario 1: Create a Sampler" )
 
 }
 
+
+
+SCENARIO( "Compute Shader" )
+{
+    // create a default window and initialize all vulkan
+    // objects.
+    auto window = createWindow(1024,768);
+
+    // resize the framegraph to the size of the
+    // swapchain. This will allocate any internal
+    // images which depend on the size of the swapchain (eg: gBuffers)
+    auto e = window->getSwapchainExtent();
+    (void)e;
+
+    gvu::RenderPassCache          rpCache;
+    gvu::DescriptorSetLayoutCache dlCache;
+    gvu::PipelineLayoutCache      plCache;
+
+    rpCache.init(window->getDevice());
+    dlCache.init(window->getDevice());
+    plCache.init(window->getDevice());
+
+    // Test creating the same object twice
+
+
+    gvu::ShaderModuleCreateInfo s_ci1(CMAKE_SOURCE_DIR "/share/shaders/comp.spv");
+
+
+    gvu::spirvPipelineReflector generator;
+    generator.addSPIRVCode(s_ci1.code, VK_SHADER_STAGE_COMPUTE_BIT);
+
+
+
+    auto C = generator.generateCombinedPipelineLayoutCreateInfo();
+
+    // create the layout using pipelineLayout and descriptorset layout cachje
+    auto layout = C.create(plCache,dlCache);
+
+    REQUIRE(layout != VK_NULL_HANDLE);
+
+    // Destroy the cache
+    plCache.destroy();
+    dlCache.destroy();
+    rpCache.destroy();
+
+    window->destroy();
+    window.reset();
+
+    SDL_Quit();
+
+}
+
