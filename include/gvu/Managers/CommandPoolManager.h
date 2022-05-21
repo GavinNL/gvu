@@ -178,11 +178,15 @@ struct CommandBuffer
 
 struct CommandPoolManager
 {
-    VkCommandPool m_pool = VK_NULL_HANDLE;
-    VkDevice m_device = VK_NULL_HANDLE;
-    VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
-    VkQueue m_graphicsQueue;
 
+    VkDevice getDevice() const
+    {
+        return m_device;
+    }
+    VkQueue getGraphicsQueue() const
+    {
+        return m_graphicsQueue;
+    }
     //==========================
     void init(VkDevice device, VkPhysicalDevice physicalDevice, VkQueue graphicsQueue)
     {
@@ -252,6 +256,11 @@ struct CommandPoolManager
         vkFreeCommandBuffers(m_device, m_pool, 1, &cmd);
     }
 
+    void resetPool()
+    {
+        vkResetCommandPool(m_device, m_pool, {});
+    }
+
     /**
      * @brief submitCommandBuffer
      * @param commandBuffer
@@ -286,6 +295,7 @@ struct CommandPoolManager
             D->m_device = m_device;
             D->m_pool   = m_pool;
             D->m_buffer = commandBuffer;
+
 
             return D;
         }
@@ -361,7 +371,10 @@ protected:
 
         throw std::runtime_error("Could not find a matching queue family index");
     }
-
+    VkCommandPool    m_pool           = VK_NULL_HANDLE;
+    VkDevice         m_device         = VK_NULL_HANDLE;
+    VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
+    VkQueue          m_graphicsQueue;
 };
 
 }
