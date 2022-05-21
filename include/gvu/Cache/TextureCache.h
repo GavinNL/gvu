@@ -258,6 +258,7 @@ protected:
     VmaAllocationInfo        allocInfo  = {};
     VkImageViewType          viewType;
     std::vector<VkImageView> mipMapViews; // one image view per mipmap
+    std::unordered_map<uint32_t, VkImageView> arrayLayerView; // one view per layer
     uint64_t byteSize = 0;
     struct
     {
@@ -375,20 +376,20 @@ public:
      * Allocate a 2D texture used for sampling. This is a GPU DEVICE ONLY texture. You cannot
      * map this texture.
      */
-    texture_handle_type allocateTexture2D(uint32_t width, uint32_t height, VkFormat format, uint32_t mipmaps=0)
+    texture_handle_type allocateTexture2D(uint32_t width, uint32_t height, VkFormat format, uint32_t mipmaps=0, VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT)
     {
         auto mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
         if(mipmaps!=0)
             mipLevels = std::min(mipmaps, mipLevels);
-        return allocateTexture({width,height,1}, format, VK_IMAGE_VIEW_TYPE_2D, 1, mipLevels, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT);
+        return allocateTexture({width,height,1}, format, VK_IMAGE_VIEW_TYPE_2D, 1, mipLevels, VK_IMAGE_LAYOUT_UNDEFINED, usage);
     }
 
-    texture_handle_type allocateTextureCube(uint32_t width, uint32_t height, VkFormat format, uint32_t mipmaps=0)
+    texture_handle_type allocateTextureCube(uint32_t width, uint32_t height, VkFormat format, uint32_t mipmaps=0, VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT)
     {
         auto mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
         if(mipmaps!=0)
             mipLevels = std::min(mipmaps, mipLevels);
-        return allocateTexture({width,height,1}, format, VK_IMAGE_VIEW_TYPE_CUBE, 6, mipLevels, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT);
+        return allocateTexture({width,height,1}, format, VK_IMAGE_VIEW_TYPE_CUBE, 6, mipLevels, VK_IMAGE_LAYOUT_UNDEFINED, usage);
     }
 
     /**
@@ -478,6 +479,7 @@ public:
     {
         return m_sharedData->commandPool.getDevice();
     }
+
     VmaAllocator getAllocator() const
     {
         return m_sharedData->allocator;
