@@ -363,22 +363,6 @@ public:
         m_sharedData->layoutCache.destroy();
         m_sharedData->commandPool.destroy();
     }
-#if 0
-    std::pair<const_texture_handle_type, bool> allocateColorAttachment(VkExtent2D        ext,
-                                                                       VkFormat          format,
-                                                                       VkImageLayout     finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                                                       VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
-    {
-        return allocateTexture( {ext.width, ext.height, 1}, format, VK_IMAGE_VIEW_TYPE_2D, 1, 1, finalLayout, usage);
-    }
-    std::pair<const_texture_handle_type, bool> allocateDepthAttachment(VkExtent2D        ext,
-                                                                       VkFormat          format = VK_FORMAT_D32_SFLOAT,
-                                                                       VkImageLayout     finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                                                       VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
-    {
-        return allocateTexture( {ext.width, ext.height, 1}, format, VK_IMAGE_VIEW_TYPE_2D, 1, 1, finalLayout, usage);
-    }
-#endif
 
     /**
      * @brief allocateTexture2D
@@ -398,6 +382,15 @@ public:
             mipLevels = std::min(mipmaps, mipLevels);
         return allocateTexture({width,height,1}, format, VK_IMAGE_VIEW_TYPE_2D, 1, mipLevels, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT);
     }
+
+    texture_handle_type allocateTextureCube(uint32_t width, uint32_t height, VkFormat format, uint32_t mipmaps=0)
+    {
+        auto mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
+        if(mipmaps!=0)
+            mipLevels = std::min(mipmaps, mipLevels);
+        return allocateTexture({width,height,1}, format, VK_IMAGE_VIEW_TYPE_CUBE, 6, mipLevels, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_USAGE_SAMPLED_BIT);
+    }
+
     /**
      * @brief allocateTexture
      * @param ext3d
@@ -480,43 +473,10 @@ public:
         }
 
     }
-#if 0
-    /**
-     * @brief destroyTexture
-     * @param i
-     *
-     * Destroys the texture if it is no no longer used by anything else.
-     * Use this function for textures such off-screen render images that
-     * change size.
-     *
-     * Texture is only destroyed if the use count == 2
-     */
-    bool destroyTextureIfUnused(const_texture_handle_type &i)
-    {
-        if(i.use_count() == 2)
-        {
-            for(auto & x : m_images)
-            {
-                if( x.get() == i.get() && x.get() != nullptr)
-                {
-                    // actually destroy the texture
-                    destroyTexture(*x);
-                    std::swap(x, m_images.back());
-
-                    m_images.pop_back();
-
-                    return true;
-                }
-            }
-            throw std::runtime_error("That texture is not managed by this cache");
-        }
-        return false;
-    }
-#endif
 
     VkDevice getDevice() const
     {
-        return m_sharedData->commandPool.m_device;
+        return m_sharedData->commandPool.getDevice();
     }
     VmaAllocator getAllocator() const
     {
@@ -526,7 +486,7 @@ protected:
 
     void destroyTexture(ImageInfo & I)
     {
-        auto dev = m_sharedData->commandPool.m_device;
+        auto dev = m_sharedData->commandPool.getDevice();
 
         vkDestroySampler(  dev, I.sampler.linear,  nullptr);
         vkDestroySampler(  dev, I.sampler.nearest, nullptr);
@@ -974,7 +934,7 @@ inline void ImageInfo::beginUpdate()
 inline void ImageInfo::endUpdate()
 {
     GVK_CHECK_RESULT(vkEndCommandBuffer(m_updateCommandBuffer));
-    auto fence = sharedData->commandPool.submitCommandBuffer(m_updateCommandBuffer, sharedData->commandPool.m_graphicsQueue, true);
+    auto fence = sharedData->commandPool.submitCommandBuffer(m_updateCommandBuffer, sharedData->commandPool.getGraphicsQueue(), true);
 }
 
 inline void ImageInfo::cmdTransitionImage(uint32_t arrayLayer, uint32_t mipLevel, VkImageLayout currentLayout, VkImageLayout finalLayout)
