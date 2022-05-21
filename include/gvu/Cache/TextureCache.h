@@ -275,7 +275,7 @@ protected:
     std::shared_ptr<SharedData> sharedData;
     bool selfManaged = true;
     VkCommandBuffer m_updateCommandBuffer = VK_NULL_HANDLE;
-    friend class TextureCache;
+    friend class MemoryCache;
 };
 
 
@@ -354,7 +354,7 @@ protected:
     VkBufferCreateInfo                        bufferInfo           = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
     void *                                    mapped               = nullptr;
     std::shared_ptr<SharedData>               sharedData;
-    friend class TextureCache;
+    friend class MemoryCache;
 
     VkDeviceSize     m_itr    = 0;
     static auto _roundUp(size_t numToRound, size_t multiple) -> size_t
@@ -402,14 +402,11 @@ struct SharedData
     DescriptorPoolManager      descriptorPool;
 
     BufferHandle _stagingBuffer;
-    //VkBuffer stagingBuffer = VK_NULL_HANDLE;
-    //VmaAllocation stagingBufferAllocation = nullptr;
-    //void * stagingBufferMapped = nullptr;
 };
 
 
 /**
- * @brief The TextureCache class
+ * @brief The MemoryCache class
  *
  * The texture cache is used to allocate ALL textures.
  *
@@ -419,7 +416,7 @@ struct SharedData
  * you allocate a texture with the same dimensions/type/etc, it will search
  * its cache for any textures that have been returned and returns that.
  */
-class TextureCache
+class MemoryCache
 {
 public:
 
