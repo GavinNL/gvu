@@ -321,7 +321,10 @@ struct BufferInfo
         vmaMapMemory(allocator, allocation, &mapped);
         return mapData();
     }
-
+    void flush()
+    {
+        vmaFlushAllocation(allocator, allocation, 0, VK_WHOLE_SIZE);
+    }
     void destroy()
     {
         if(mapped)
@@ -399,9 +402,9 @@ struct SharedData
     DescriptorPoolManager      descriptorPool;
 
     BufferHandle _stagingBuffer;
-    VkBuffer stagingBuffer = VK_NULL_HANDLE;
-    VmaAllocation stagingBufferAllocation = nullptr;
-    void * stagingBufferMapped = nullptr;
+    //VkBuffer stagingBuffer = VK_NULL_HANDLE;
+    //VmaAllocation stagingBufferAllocation = nullptr;
+    //void * stagingBufferMapped = nullptr;
 };
 
 
@@ -440,7 +443,7 @@ public:
         auto layout = m_sharedData->layoutCache.create(dslci);
         m_sharedData->descriptorPool.init(device, &m_sharedData->layoutCache, layout, 1024);
 
-        m_sharedData->_stagingBuffer = allocateBuffer(1024*1024*4, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        m_sharedData->_stagingBuffer = allocateBuffer(1024*1024*4, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     }
 
     /**
@@ -467,15 +470,7 @@ public:
         {
             m_sharedData->_stagingBuffer->destroy();
         }
-        if(m_sharedData->stagingBufferAllocation)
-        {
-            vmaUnmapMemory(  m_sharedData->allocator, m_sharedData->stagingBufferAllocation);
-            vmaDestroyBuffer(m_sharedData->allocator, m_sharedData->stagingBuffer, m_sharedData->stagingBufferAllocation);
 
-            m_sharedData->stagingBufferAllocation = nullptr;
-            m_sharedData->stagingBuffer = VK_NULL_HANDLE;
-            m_sharedData->stagingBufferMapped = nullptr;
-        }
         m_sharedData->descriptorPool.destroy();
         m_sharedData->layoutCache.destroy();
         m_sharedData->commandPool.destroy();
@@ -830,47 +825,22 @@ void BufferInfo::setData(void *data, VkDeviceSize byteSize, VkDeviceSize offset)
 {
     auto allocator = sharedData->allocator;
 
-    if(sharedData->stagingBufferAllocation)
+    if(sharedData->_stagingBuffer)
     {
-        VmaAllocationInfo stagingBufferInfo = {};
-        vmaGetAllocationInfo(allocator, sharedData->stagingBufferAllocation, &stagingBufferInfo);
-        if(stagingBufferInfo.size < byteSize)
+        if( sharedData->_stagingBuffer->getBufferSize() < byteSize)
         {
-            vmaUnmapMemory(sharedData->allocator, sharedData->stagingBufferAllocation);
-            vmaDestroyBuffer(sharedData->allocator, sharedData->stagingBuffer, allocation);
-
-            sharedData->stagingBufferAllocation = nullptr;
-            sharedData->stagingBuffer           = VK_NULL_HANDLE;
-            sharedData->stagingBufferMapped     = nullptr;
+            sharedData->_stagingBuffer->resize(byteSize);
         }
-    }
-
-
-    if(sharedData->stagingBuffer == VK_NULL_HANDLE)
-    {
-        VkBufferCreateInfo bufferInfo = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-        bufferInfo.size  = byteSize;
-        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-
-        VmaAllocationCreateInfo allocInfo = {};
-        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
-
-        auto suc = vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &sharedData->stagingBuffer, &sharedData->stagingBufferAllocation, nullptr);
-        assert(suc == VK_SUCCESS);
-        void * mapped = nullptr;
-        suc = vmaMapMemory(allocator, sharedData->stagingBufferAllocation, &mapped);
-        sharedData->stagingBufferMapped = mapped;
     }
 
     // copy to staging buffer
     {
-        std::memcpy(sharedData->stagingBufferMapped, data, byteSize);
-        vmaFlushAllocation(allocator, sharedData->stagingBufferAllocation, 0, VK_WHOLE_SIZE);
+        std::memcpy(sharedData->_stagingBuffer->mapData(), data, byteSize);
+        sharedData->_stagingBuffer->flush();
     }
 
     {
-        auto fence = sharedData->commandPool.beginRecording([srcBuffer=sharedData->stagingBuffer,
+        auto fence = sharedData->commandPool.beginRecording([srcBuffer=sharedData->_stagingBuffer->getBuffer(),
                                                              dstBuffer=this->getBuffer(),byteSize,offset,this](auto cmd)
         {
             VkBufferCopy region;
@@ -912,47 +882,22 @@ void ImageInfo::setData(void * data)
 
     auto byteSize = getExtents().width * getExtents().height * getFormatInfo(info.format).blockSizeInBits/8;
 
-    if(sharedData->stagingBufferAllocation)
+    if(sharedData->_stagingBuffer)
     {
-        VmaAllocationInfo stagingBufferInfo = {};
-        vmaGetAllocationInfo(allocator, sharedData->stagingBufferAllocation, &stagingBufferInfo);
-        if(stagingBufferInfo.size < byteSize)
+        if( sharedData->_stagingBuffer->getBufferSize() < byteSize)
         {
-            vmaUnmapMemory(sharedData->allocator, sharedData->stagingBufferAllocation);
-            vmaDestroyBuffer(sharedData->allocator, sharedData->stagingBuffer, allocation);
-
-            sharedData->stagingBufferAllocation = nullptr;
-            sharedData->stagingBuffer = VK_NULL_HANDLE;
-            sharedData->stagingBufferMapped = nullptr;
+            sharedData->_stagingBuffer->resize(byteSize);
         }
-    }
-
-
-    if(sharedData->stagingBuffer == VK_NULL_HANDLE)
-    {
-        VkBufferCreateInfo bufferInfo = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-        bufferInfo.size  = byteSize;
-        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-
-        VmaAllocationCreateInfo allocInfo = {};
-        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
-
-        auto suc = vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &sharedData->stagingBuffer, &sharedData->stagingBufferAllocation, nullptr);
-        assert(suc == VK_SUCCESS);
-        void * mapped = nullptr;
-        suc = vmaMapMemory(allocator, sharedData->stagingBufferAllocation, &mapped);
-        sharedData->stagingBufferMapped = mapped;
     }
 
     // copy to staging buffer
     {
-        std::memcpy(sharedData->stagingBufferMapped, data, byteSize);
-        vmaFlushAllocation(allocator, sharedData->stagingBufferAllocation, 0, VK_WHOLE_SIZE);
+        std::memcpy(sharedData->_stagingBuffer->mapData(), data, byteSize);
+        sharedData->_stagingBuffer->flush();
     }
 
     {
-        auto fence = sharedData->commandPool.beginRecording([buffer=sharedData->stagingBuffer,this](auto cmd)
+        auto fence = sharedData->commandPool.beginRecording([buffer=sharedData->_stagingBuffer->getBuffer(),this](auto cmd)
         {
             VkImageMemoryBarrier copy_barrier = {};
             copy_barrier.sType                       = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1008,47 +953,21 @@ void ImageInfo::copyData(void * data, uint32_t width, uint32_t height,
 
     auto byteSize = width * height * getFormatInfo(info.format).blockSizeInBits/8;
 
-    if(sharedData->stagingBufferAllocation)
+    if(sharedData->_stagingBuffer)
     {
-        VmaAllocationInfo stagingBufferInfo = {};
-        vmaGetAllocationInfo(allocator, sharedData->stagingBufferAllocation, &stagingBufferInfo);
-        if(stagingBufferInfo.size < byteSize)
+        if( sharedData->_stagingBuffer->getBufferSize() < byteSize)
         {
-            vmaUnmapMemory(sharedData->allocator, sharedData->stagingBufferAllocation);
-            vmaDestroyBuffer(sharedData->allocator, sharedData->stagingBuffer, allocation);
-
-            sharedData->stagingBufferAllocation = nullptr;
-            sharedData->stagingBuffer = VK_NULL_HANDLE;
-            sharedData->stagingBufferMapped = nullptr;
+            sharedData->_stagingBuffer->resize(byteSize);
         }
     }
-
-
-    if(sharedData->stagingBuffer == VK_NULL_HANDLE)
-    {
-        VkBufferCreateInfo bufferInfo = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-        bufferInfo.size  = byteSize;
-        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-
-        VmaAllocationCreateInfo allocInfo = {};
-        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
-
-        auto suc = vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &sharedData->stagingBuffer, &sharedData->stagingBufferAllocation, nullptr);
-        assert(suc == VK_SUCCESS);
-        void * mapped = nullptr;
-        suc = vmaMapMemory(allocator, sharedData->stagingBufferAllocation, &mapped);
-        sharedData->stagingBufferMapped = mapped;
-    }
-
     // copy to staging buffer
     {
-        std::memcpy(sharedData->stagingBufferMapped, data, byteSize);
-        vmaFlushAllocation(allocator, sharedData->stagingBufferAllocation, 0, VK_WHOLE_SIZE);
+        std::memcpy(sharedData->_stagingBuffer->mapData(), data, byteSize);
+        sharedData->_stagingBuffer->flush();
     }
 
     {
-        auto fence = sharedData->commandPool.beginRecording([buffer=sharedData->stagingBuffer,width, height,arrayLayer, mipLevel, x_ImageOffset, y_ImageOffset, this](auto cmd)
+        auto fence = sharedData->commandPool.beginRecording([buffer=sharedData->_stagingBuffer->getBuffer(),width, height,arrayLayer, mipLevel, x_ImageOffset, y_ImageOffset, this](auto cmd)
         {
             VkImageMemoryBarrier copy_barrier = {};
             copy_barrier.sType                       = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1108,42 +1027,18 @@ void ImageInfo::cmdCopyData(void * data, uint32_t width, uint32_t height,
 
     auto byteSize = width * height * getFormatInfo(info.format).blockSizeInBits/8;
 
-    if(sharedData->stagingBufferAllocation)
+    if(sharedData->_stagingBuffer)
     {
-        VmaAllocationInfo stagingBufferInfo = {};
-        vmaGetAllocationInfo(allocator, sharedData->stagingBufferAllocation, &stagingBufferInfo);
-        if(stagingBufferInfo.size < byteSize)
+        if( sharedData->_stagingBuffer->getBufferSize() < byteSize)
         {
-            vmaUnmapMemory(sharedData->allocator, sharedData->stagingBufferAllocation);
-            vmaDestroyBuffer(sharedData->allocator, sharedData->stagingBuffer, allocation);
-
-            sharedData->stagingBufferAllocation = nullptr;
-            sharedData->stagingBuffer = VK_NULL_HANDLE;
-            sharedData->stagingBufferMapped = nullptr;
+            sharedData->_stagingBuffer->resize(byteSize);
         }
-    }
-
-    if(sharedData->stagingBuffer == VK_NULL_HANDLE)
-    {
-        VkBufferCreateInfo bufferInfo = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-        bufferInfo.size  = byteSize;
-        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-
-        VmaAllocationCreateInfo allocInfo = {};
-        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
-
-        auto suc = vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &sharedData->stagingBuffer, &sharedData->stagingBufferAllocation, nullptr);
-        assert(suc == VK_SUCCESS);
-        void * mapped = nullptr;
-        suc = vmaMapMemory(allocator, sharedData->stagingBufferAllocation, &mapped);
-        sharedData->stagingBufferMapped = mapped;
     }
 
     // copy to staging buffer
     {
-        std::memcpy(sharedData->stagingBufferMapped, data, byteSize);
-        vmaFlushAllocation(allocator, sharedData->stagingBufferAllocation, 0, VK_WHOLE_SIZE);
+        std::memcpy(sharedData->_stagingBuffer->mapData(), data, byteSize);
+        sharedData->_stagingBuffer->flush();
     }
 
     {
@@ -1158,7 +1053,7 @@ void ImageInfo::cmdCopyData(void * data, uint32_t width, uint32_t height,
         region.imageExtent.width           = width;// getExtents().width;
         region.imageExtent.height          = height; //getExtents().height;
         region.imageExtent.depth           = 1;//getExtents().depth;
-        vkCmdCopyBufferToImage(m_updateCommandBuffer, sharedData->stagingBuffer, getImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+        vkCmdCopyBufferToImage(m_updateCommandBuffer, sharedData->_stagingBuffer->getBuffer(), getImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
     }
 }
 
