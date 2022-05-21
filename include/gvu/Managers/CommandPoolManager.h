@@ -374,8 +374,73 @@ protected:
     VkCommandPool    m_pool           = VK_NULL_HANDLE;
     VkDevice         m_device         = VK_NULL_HANDLE;
     VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
-    VkQueue          m_graphicsQueue;
+    VkQueue          m_graphicsQueue  = VK_NULL_HANDLE;
 };
+
+
+struct CommandPoolManager2
+{
+    void init(VkDevice device, VkPhysicalDevice physicalDevice, VkQueue graphicsQueue)
+    {
+        m_graphicsQueue = graphicsQueue;
+        m_physicalDevice = physicalDevice;
+        m_device         = device;
+    }
+
+    void destroy()
+    {
+        for(auto & c : m_commandPools)
+        {
+            c->destroy();
+        }
+        m_device = VK_NULL_HANDLE;
+        m_physicalDevice = VK_NULL_HANDLE;
+        m_graphicsQueue = VK_NULL_HANDLE;
+    }
+
+    /**
+     * @brief getCommandPool
+     * @return
+     *
+     * Get a command pool that is currently unused.
+     * A command pool is considered unused if it's
+     * shared_ptr has use_count() == 1.
+     *
+     * If no command pools are available, it will create a new one
+     */
+    std::shared_ptr<CommandPoolManager> getCommandPool()
+    {
+        for(auto & c : m_commandPools)
+        {
+            if(c.use_count() == 1)
+            {
+                c->resetPool();
+                return c;
+            }
+        }
+
+        auto c = std::make_shared<CommandPoolManager>();
+        c->init(m_device, m_physicalDevice, m_graphicsQueue);
+        m_commandPools.push_back(c);
+        return c;
+    }
+
+    VkDevice getDevice() const
+    {
+        return m_device;
+    }
+    VkQueue getGraphicsQueue() const
+    {
+        return m_graphicsQueue;
+    }
+    //==========================
+
+    std::vector< std::shared_ptr<CommandPoolManager> > m_commandPools;
+    VkDevice         m_device         = VK_NULL_HANDLE;
+    VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
+    VkQueue          m_graphicsQueue  = VK_NULL_HANDLE;
+};
+
 
 }
 
