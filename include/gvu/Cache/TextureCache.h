@@ -278,6 +278,115 @@ protected:
     friend class TextureCache;
 };
 
+
+struct BufferInfo
+{
+    /**
+     * @brief setData
+     * @param data
+     * @param byteSize
+     * @param offset
+     *
+     * Copies the data from the host to the buffer
+     */
+    void setData(void *data, VkDeviceSize byteSize, VkDeviceSize offset);
+
+    VkBuffer getBuffer() const
+    {
+        return buffer;
+    }
+
+    VkDeviceSize getBufferSize() const
+    {
+        return bufferInfo.size;
+    }
+
+    VkDeviceSize getAllocationSize() const
+    {
+        return allocationInfo.size;
+    }
+
+    /**
+     * @brief mapData
+     * @return
+     *
+     * Map data, but only if it is host mappable
+     */
+    void* mapData()
+    {
+        if(mapped)
+        {
+            return mapped;
+        }
+        vmaMapMemory(allocator, allocation, &mapped);
+        return mapData();
+    }
+
+    void destroy()
+    {
+        if(mapped)
+        {
+            vmaUnmapMemory(allocator, allocation);
+            mapped = nullptr;
+        }
+        vmaDestroyBuffer(allocator, buffer, allocation);
+        buffer = VK_NULL_HANDLE;
+        allocation = nullptr;
+    }
+
+    /**
+     * @brief resize
+     * @param size
+     *
+     * Reallocate the data
+     */
+    void resize(VkDeviceSize bytes);
+
+protected:
+    VkBuffer                                  buffer         = VK_NULL_HANDLE;
+    VmaAllocation                             allocation     = nullptr;
+    VmaAllocationInfo                         allocationInfo = {};
+    VmaAllocator                              allocator;
+    VmaAllocationCreateInfo                   allocationCreateInfo = {};
+    VkBufferCreateInfo                        bufferInfo           = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+    void *                                    mapped               = nullptr;
+    std::shared_ptr<SharedData>               sharedData;
+    friend class TextureCache;
+
+    VkDeviceSize     m_itr    = 0;
+    static auto _roundUp(size_t numToRound, size_t multiple) -> size_t
+    {
+        //assert(multiple);
+        return ((numToRound + multiple - 1) / multiple) * multiple;
+    };
+
+    size_t push_back(void const * value, size_t count, uint32_t sizeofValue)
+    {
+        auto totalByteSize = sizeofValue*count;
+
+        auto startIndex = _roundUp(m_itr, sizeofValue );
+
+        if( startIndex + totalByteSize >= getBufferSize())
+        {
+            m_itr = 0;
+            startIndex = 0;
+            m_itr = startIndex;
+        }
+
+        auto m_mapped = static_cast<unsigned char*>(mapData());
+        auto r = startIndex;
+        std::memcpy(&m_mapped[startIndex],
+                    value,
+                    totalByteSize);
+
+        m_itr = startIndex + count * sizeofValue;
+
+        return r / sizeofValue;
+    }
+
+};
+
+using BufferHandle   = std::shared_ptr<BufferInfo>;
 using TextureHandle   = std::shared_ptr<ImageInfo>;
 using WTextureHandle  = std::weak_ptr<ImageInfo>;
 
@@ -289,6 +398,7 @@ struct SharedData
     DescriptorSetLayoutCache   layoutCache;
     DescriptorPoolManager      descriptorPool;
 
+    BufferHandle _stagingBuffer;
     VkBuffer stagingBuffer = VK_NULL_HANDLE;
     VmaAllocation stagingBufferAllocation = nullptr;
     void * stagingBufferMapped = nullptr;
@@ -319,16 +429,18 @@ public:
               VmaAllocator     allocator)
     {
         auto data = std::make_shared<SharedData>();
+
         data->commandPool.init(device, physicalDevice, graphicsQueue);
         m_sharedData = data;
         m_sharedData->allocator = allocator;
-
         m_sharedData->layoutCache.init(device);
 
         DescriptorSetLayoutCreateInfo dslci;
         dslci.bindings.push_back( VkDescriptorSetLayoutBinding{0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,1,VK_SHADER_STAGE_FRAGMENT_BIT, nullptr});
         auto layout = m_sharedData->layoutCache.create(dslci);
         m_sharedData->descriptorPool.init(device, &m_sharedData->layoutCache, layout, 1024);
+
+        m_sharedData->_stagingBuffer = allocateBuffer(1024*1024*4, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     }
 
     /**
@@ -351,6 +463,10 @@ public:
             m_images.pop_back();
         }
 
+        if(m_sharedData->_stagingBuffer)
+        {
+            m_sharedData->_stagingBuffer->destroy();
+        }
         if(m_sharedData->stagingBufferAllocation)
         {
             vmaUnmapMemory(  m_sharedData->allocator, m_sharedData->stagingBufferAllocation);
@@ -391,6 +507,46 @@ public:
             mipLevels = std::min(mipmaps, mipLevels);
         return allocateTexture({width,height,1}, format, VK_IMAGE_VIEW_TYPE_CUBE, 6, mipLevels, VK_IMAGE_LAYOUT_UNDEFINED, usage);
     }
+
+    /**
+     * @brief allocateBuffer
+     * @param bytes
+     * @param usage
+     * @param memUsage
+     * @return
+     *
+     * Allocate a buffer
+     */
+    BufferHandle allocateBuffer(size_t bytes, VkBufferUsageFlags usage, VmaMemoryUsage memUsage)
+    {
+        auto b = std::make_shared<BufferInfo>();
+        b->allocator = getAllocator();
+
+        VkBufferCreateInfo & bufferInfo = b->bufferInfo;
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size  = bytes;
+        bufferInfo.usage = usage;
+
+        VmaAllocationCreateInfo & allocCInfo = b->allocationCreateInfo;
+        allocCInfo.usage = memUsage;
+        allocCInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT; // can always set this bit,
+                                                             // vma will not allow device local
+                                                             // memory to be mapped
+
+        VkBuffer &         buffer     = b->buffer;
+        VmaAllocation &    allocation = b->allocation;
+        VmaAllocationInfo &allocInfo  = b->allocationInfo;
+
+        auto result = vmaCreateBuffer(getAllocator(), &bufferInfo, &allocCInfo, &buffer, &allocation, &allocInfo);
+
+        if( result != VK_SUCCESS)
+        {
+           throw std::runtime_error( "Error allocating VMA Buffer");
+        }
+        b->sharedData = m_sharedData;
+        return b;
+    }
+
 
     /**
      * @brief allocateTexture
@@ -670,6 +826,85 @@ protected:
     std::shared_ptr<SharedData>                      m_sharedData;
 };
 
+void BufferInfo::setData(void *data, VkDeviceSize byteSize, VkDeviceSize offset)
+{
+    auto allocator = sharedData->allocator;
+
+    if(sharedData->stagingBufferAllocation)
+    {
+        VmaAllocationInfo stagingBufferInfo = {};
+        vmaGetAllocationInfo(allocator, sharedData->stagingBufferAllocation, &stagingBufferInfo);
+        if(stagingBufferInfo.size < byteSize)
+        {
+            vmaUnmapMemory(sharedData->allocator, sharedData->stagingBufferAllocation);
+            vmaDestroyBuffer(sharedData->allocator, sharedData->stagingBuffer, allocation);
+
+            sharedData->stagingBufferAllocation = nullptr;
+            sharedData->stagingBuffer           = VK_NULL_HANDLE;
+            sharedData->stagingBufferMapped     = nullptr;
+        }
+    }
+
+
+    if(sharedData->stagingBuffer == VK_NULL_HANDLE)
+    {
+        VkBufferCreateInfo bufferInfo = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+        bufferInfo.size  = byteSize;
+        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+        VmaAllocationCreateInfo allocInfo = {};
+        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
+
+        auto suc = vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &sharedData->stagingBuffer, &sharedData->stagingBufferAllocation, nullptr);
+        assert(suc == VK_SUCCESS);
+        void * mapped = nullptr;
+        suc = vmaMapMemory(allocator, sharedData->stagingBufferAllocation, &mapped);
+        sharedData->stagingBufferMapped = mapped;
+    }
+
+    // copy to staging buffer
+    {
+        std::memcpy(sharedData->stagingBufferMapped, data, byteSize);
+        vmaFlushAllocation(allocator, sharedData->stagingBufferAllocation, 0, VK_WHOLE_SIZE);
+    }
+
+    {
+        auto fence = sharedData->commandPool.beginRecording([srcBuffer=sharedData->stagingBuffer,
+                                                             dstBuffer=this->getBuffer(),byteSize,offset,this](auto cmd)
+        {
+            VkBufferCopy region;
+            region.dstOffset = offset;
+            region.size      = byteSize;
+            region.srcOffset = 0;
+            vkCmdCopyBuffer(cmd, srcBuffer ,dstBuffer, 1, &region);
+
+        }, true);
+    }
+}
+
+inline void BufferInfo::resize(VkDeviceSize bytes)
+{
+    destroy();
+
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size  = bytes;
+    //bufferInfo.usage = usage;
+
+    VmaAllocationCreateInfo & allocCInfo = allocationCreateInfo;
+    //allocCInfo.usage = memUsage;
+    allocCInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT; // can always set this bit,
+    // vma will not allow device local
+    // memory to be mapped
+
+
+    auto result = vmaCreateBuffer(sharedData->allocator, &bufferInfo, &allocCInfo, &buffer, &allocation, &allocationInfo);
+
+    if( result != VK_SUCCESS)
+    {
+        throw std::runtime_error( "Error allocating VMA Buffer");
+    }
+}
 
 void ImageInfo::setData(void * data)
 {
@@ -887,7 +1122,6 @@ void ImageInfo::cmdCopyData(void * data, uint32_t width, uint32_t height,
             sharedData->stagingBufferMapped = nullptr;
         }
     }
-
 
     if(sharedData->stagingBuffer == VK_NULL_HANDLE)
     {
