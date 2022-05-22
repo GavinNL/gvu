@@ -200,7 +200,18 @@ struct ImageInfo
         }
     }
 
+    //=====================================================================================================================
 
+
+
+    /**
+     * @brief transitionForRendering
+     * @param c
+     *
+     * Transitions this image so that it can be used for rendering
+     * using Dynamic Rendering.
+     * This only works if the image was created with the ATTACHMENT useage bit set
+     */
     void transitionForRendering(VkCommandBuffer c)
     {
         VkImageSubresourceRange range{};
@@ -250,7 +261,14 @@ struct ImageInfo
         }
     }
 
-    void transitionImageForSampling(VkCommandBuffer c)
+    /**
+     * @brief transitionForSampling
+     * @param c
+     *
+     * Transitions this image so that it can be used for sampling.
+     * This is meant to be called after
+     */
+    void transitionForSampling(VkCommandBuffer c, VkImageLayout oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
     {
         VkImageSubresourceRange range{};
         auto format = getFormat();
@@ -280,7 +298,7 @@ struct ImageInfo
                                         getImage(),
                                         VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                                         0,
-                                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                        oldLayout,
                                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                                         VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
