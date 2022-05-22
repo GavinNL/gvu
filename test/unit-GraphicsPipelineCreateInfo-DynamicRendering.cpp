@@ -49,12 +49,6 @@ SCENARIO( " Create a graphics pipeline using a renderpass" )
 
     //
 
-    //---- Create the render pass
-    CacheType::createInfo_type ci2 = CacheType::createInfo_type::createSimpleRenderPass( {{VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL}},
-                                                                                        {VK_FORMAT_D32_SFLOAT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL});
-    auto renderPass = rpCache.create(ci2);
-    //----
-
 
     //------ Create the pipeline layout
     gvu::PipelineLayoutCreateInfo pci;
@@ -64,12 +58,13 @@ SCENARIO( " Create a graphics pipeline using a renderpass" )
     //----
     gvu::GraphicsPipelineCreateInfo gci;
 
-    gci.setOutputFormat(0, VK_FORMAT_R8G8B8A8_UNORM);
+
     gci.setVertexInputs({VK_FORMAT_R32G32B32_SFLOAT,VK_FORMAT_R32G32B32_SFLOAT,VK_FORMAT_R8G8B8A8_UNORM});
 
+    gci.setOutputFormat(0, VK_FORMAT_R8G8B8A8_UNORM);
     gci.vertexShader = vert_s;
     gci.fragmentShader = frag_s;
-    gci.renderPass = renderPass;
+    gci.renderPass = VK_NULL_HANDLE;
     gci.pipelineLayout = pipelineLayout;
 
     gci.dynamicStates = {VK_DYNAMIC_STATE_SCISSOR, VK_DYNAMIC_STATE_VIEWPORT};
