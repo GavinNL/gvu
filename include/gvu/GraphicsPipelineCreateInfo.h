@@ -134,17 +134,14 @@ struct GraphicsPipelineCreateInfo
     bool                        enableDepthWrite  = false;
     uint32_t                    tesselationPatchControlPoints = 3;
 
-    // the number of output framebuffers
-    // this would normally be 1 if you are rendering to the swapchain.
-    // if you are rendering to deferred framebuffer, change this value.
-    // This value sets the blend values to some default.
-  //  uint32_t                    outputColorTargets= 1;
+
     std::vector<VkFormat>       outputColorTargetFormats;
     VkFormat                    depthFormat = VK_FORMAT_UNDEFINED;
     bool                        enableBlending    = true; // enables blending for all targets, if you want
                                                           // specific control, you will need to modify CreateInfo
                                                           // after the call to .create( VkGraphicsPipelineCreateInfo & info )
 
+    std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachmentStates;
 
     // These must not be null
     VkShaderModule   vertexShader      = VK_NULL_HANDLE;
@@ -317,7 +314,7 @@ struct GraphicsPipelineCreateInfo
     }
 
 
-    std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachmentStates;
+
 
     void setOutputFormat(uint32_t index, VkFormat format)
     {
@@ -501,7 +498,6 @@ struct GraphicsPipelineCreateInfo
         colorBlending.blendConstants[1] = 0.0f;
         colorBlending.blendConstants[2] = 0.0f;
         colorBlending.blendConstants[3] = 0.0f;
-
 
         VkPipelineDepthStencilStateCreateInfo dsInfo = {};
         dsInfo.sType                                 = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;

@@ -61,6 +61,7 @@ SCENARIO( " Create a graphics pipeline using a renderpass" )
 
     gci.setVertexInputs({VK_FORMAT_R32G32B32_SFLOAT,VK_FORMAT_R32G32B32_SFLOAT,VK_FORMAT_R8G8B8A8_UNORM});
 
+    // this is required to be set
     gci.setOutputFormat(0, VK_FORMAT_R8G8B8A8_UNORM);
     gci.vertexShader = vert_s;
     gci.fragmentShader = frag_s;
