@@ -281,12 +281,12 @@ protected:
 
         vkDestroySampler(  dev, I.sampler.linear,  nullptr);
         vkDestroySampler(  dev, I.sampler.nearest, nullptr);
-        vkDestroyImageView(dev, I.imageView      , nullptr);
-
-        for(auto & v : I.mipMapViews)
-        {
-            vkDestroyImageView(dev, v, nullptr);
-        }
+        //vkDestroyImageView(dev, I.imageView      , nullptr);
+        //
+        //for(auto & v : I.mipMapViews)
+        //{
+        //    vkDestroyImageView(dev, v, nullptr);
+        //}
         for(auto & v : I.m_imageViews)
         {
             vkDestroyImageView(dev, v.second, nullptr);
@@ -297,9 +297,9 @@ protected:
 
         I.allocation     = nullptr;
         I.image          = VK_NULL_HANDLE;
-        I.imageView      = VK_NULL_HANDLE;
+        //I.imageView      = VK_NULL_HANDLE;
         I.sampler.linear = I.sampler.nearest = VK_NULL_HANDLE;
-        I.mipMapViews.clear();
+        //I.mipMapViews.clear();
     }
 
     texture_handle_type _findAvailable(VkFormat format, VkExtent3D extent, VkImageViewType viewType, VkImageUsageFlags usage, uint32_t arrayLayers, uint32_t mipMaps)
@@ -375,6 +375,7 @@ protected:
         I.byteSize   = allocInfo.size;
 
         // create the image view
+        /*
         {
             {
                 VkImageViewCreateInfo ci{};
@@ -422,12 +423,13 @@ protected:
                 }
             }
         }
+        */
 
 
         // create a sampler
         {
             // Temporary 1-mipmap sampler
-            VkSamplerCreateInfo ci;
+            VkSamplerCreateInfo ci = {};
             ci.sType                   =  VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
             ci.magFilter               =  VK_FILTER_LINEAR;//  vk::Filter::eLinear;
             ci.minFilter               =  VK_FILTER_LINEAR;//  vk::Filter::eLinear;

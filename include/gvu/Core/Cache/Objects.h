@@ -62,6 +62,10 @@ struct ImageInfo
      */
     VkImageView getImageView(uint32_t layer, uint32_t layerCount, uint32_t mip, uint32_t mipCount, VkImageViewType type = VK_IMAGE_VIEW_TYPE_MAX_ENUM);
 
+    VkImageView getImageView()
+    {
+        return getImageView(0, VK_REMAINING_ARRAY_LAYERS, 0, VK_REMAINING_MIP_LEVELS);
+    }
     /**
      * @brief getSingleImageSet
      * @param layer
@@ -488,18 +492,18 @@ struct ImageInfo
     {
         return image;
     }
-    VkImageView getImageView() const
-    {
-        return imageView;
-    }
+    //VkImageView getImageView() const
+    //{
+    //    return imageView;
+    //}
     VkImageViewType getImageViewType() const
     {
         return viewType;
     }
-    VkImageView getMipMapView(uint32_t mipLevel) const
-    {
-        return mipMapViews.at(mipLevel);
-    }
+    //VkImageView getMipMapView(uint32_t mipLevel) const
+    //{
+    //    return mipMapViews.at(mipLevel);
+    //}
     VkSampler getNearestSampler() const
     {
         return sampler.nearest;
@@ -524,12 +528,12 @@ struct ImageInfo
 
 protected:
     VkImage                  image      = VK_NULL_HANDLE;
-    VkImageView              imageView  = VK_NULL_HANDLE;
+//    VkImageView              imageView  = VK_NULL_HANDLE;
     VkImageCreateInfo        info       = {};
     VmaAllocation            allocation = nullptr;
     VmaAllocationInfo        allocInfo  = {};
     VkImageViewType          viewType;
-    std::vector<VkImageView> mipMapViews; // one image view per mipmap
+//    std::vector<VkImageView> mipMapViews; // one image view per mipmap
     std::map<ImageViewRange, VkImageView> m_imageViews;
     uint64_t byteSize = 0;
     struct
