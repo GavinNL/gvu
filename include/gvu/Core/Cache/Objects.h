@@ -32,9 +32,10 @@ struct ImageViewRange
     uint32_t layerCount;
     uint32_t mip;
     uint32_t mipCount;
+    VkImageViewType viewType;
     bool operator<(ImageViewRange const & r) const
     {
-        return std::tie(layer,layerCount, mip, mipCount) < std::tie(r.layer, r.layerCount, r.mip, r.mipCount);
+        return std::tie(layer,layerCount, mip, mipCount,viewType) < std::tie(r.layer, r.layerCount, r.mip, r.mipCount, viewType);
     }
 };
 
@@ -59,7 +60,19 @@ struct ImageInfo
      *
      * Creates or returns an image view for the specific range
      */
-    VkImageView getImageView(uint32_t layer, uint32_t layerCount, uint32_t mip, uint32_t mipCount);
+    VkImageView getImageView(uint32_t layer, uint32_t layerCount, uint32_t mip, uint32_t mipCount, VkImageViewType type = VK_IMAGE_VIEW_TYPE_MAX_ENUM);
+
+    /**
+     * @brief getSingleImageSet
+     * @param layer
+     * @param mip
+     * @return
+     *
+     * Returns a descriptor set on binding 0 for a specific layer/mip level
+     * This is really only meant to be used for rendering images in ImGui
+     */
+    VkDescriptorSet getSingleImageSet(uint32_t layer, uint32_t mip);
+
 
     /**
      * @brief copyData
@@ -530,6 +543,10 @@ protected:
         //VkSampler current = VK_NULL_HANDLE; // do not destroy
     } sampler;
 
+    // a map of descriptor sets which have been created
+    // for a specific layer/mip level. Mostly only used
+    // for ImGui
+    std::map< std::pair<uint32_t, uint32_t>, VkDescriptorSet > arrayMipDescriptorSet;
     // a single descriptor set which is used for this
     // image so that it can be passed to IMGUI
     VkDescriptorSet singleDescriptorSet = VK_NULL_HANDLE;

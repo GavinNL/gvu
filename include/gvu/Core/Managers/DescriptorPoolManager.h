@@ -270,9 +270,10 @@ public:
         }
         m_pools.clear();
     }
-    void allocate(DescriptorSetLayoutCreateInfo const &ci)
+    VkDescriptorSet allocate(DescriptorSetLayoutCreateInfo const &ci)
     {
         auto l = m_cache->create(ci);
+        return allocate(l);
     }
 
     VkDescriptorSet allocate(VkDescriptorSetLayout layout)

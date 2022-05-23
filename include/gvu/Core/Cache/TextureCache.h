@@ -124,12 +124,12 @@ public:
         return allocateTexture({width,height,1}, format, VK_IMAGE_VIEW_TYPE_2D, 1, mipLevels, VK_IMAGE_LAYOUT_UNDEFINED, usage);
     }
 
-    texture_handle_type allocateTextureCube(uint32_t width, uint32_t height, VkFormat format, uint32_t mipmaps=0, VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT)
+    texture_handle_type allocateTextureCube(uint32_t length,VkFormat format, uint32_t mipmaps=0, VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT)
     {
-        auto mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
+        auto mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(length, length)))) + 1;
         if(mipmaps!=0)
             mipLevels = std::min(mipmaps, mipLevels);
-        return allocateTexture({width,height,1}, format, VK_IMAGE_VIEW_TYPE_CUBE, 6, mipLevels, VK_IMAGE_LAYOUT_UNDEFINED, usage);
+        return allocateTexture({length,length,1}, format, VK_IMAGE_VIEW_TYPE_CUBE, 6, mipLevels, VK_IMAGE_LAYOUT_UNDEFINED, usage);
     }
 
     /**
@@ -301,7 +301,7 @@ protected:
             vkDestroyImageView(dev, v.second, nullptr);
         }
 
-        std::cerr << "Destroying Image: " << I.image << std::endl;
+        //std::cerr << "Destroying Image: " << I.image << std::endl;
         vmaDestroyImage(m_sharedData->allocator, I.image, I.allocation);
 
         I.allocation     = nullptr;
@@ -756,9 +756,33 @@ inline void ImageInfo::cmdTransitionImage(std::shared_ptr<ImageInfo> other,uint3
     vkCmdPipelineBarrier(m_updateCommandBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &copy_barrier);
 }
 
-VkImageView ImageInfo::getImageView(uint32_t layer, uint32_t layerCount, uint32_t mip, uint32_t mipCount)
+VkDescriptorSet ImageInfo::getSingleImageSet(uint32_t layer, uint32_t mip)
 {
-    ImageViewRange r{layer,layerCount,mip,mipCount};
+    auto it = arrayMipDescriptorSet.find({layer,mip});
+    if(it != arrayMipDescriptorSet.end() )
+        return it->second;
+
+    auto set =  sharedData->descriptorPool.allocateDescriptorSet();
+
+    VkDescriptorImageInfo imageInfo = {};
+    imageInfo.imageLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    imageInfo.imageView             = getImageView(layer,1, mip,1, VK_IMAGE_VIEW_TYPE_2D);
+    imageInfo.sampler               = getLinearSampler();
+
+    VkWriteDescriptorSet wr = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    wr.descriptorCount      = 1;
+    wr.descriptorType       = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    wr.dstSet               = set;
+    wr.pImageInfo           = &imageInfo;
+
+    vkUpdateDescriptorSets(sharedData->commandPool.getDevice(), 1, &wr, 0, nullptr);
+    arrayMipDescriptorSet[{layer,mip}] = set;
+    return set;
+}
+
+VkImageView ImageInfo::getImageView(uint32_t layer, uint32_t layerCount, uint32_t mip, uint32_t mipCount, VkImageViewType type)
+{
+    ImageViewRange r{layer,layerCount,mip,mipCount,type};
 
     auto it = m_imageViews.find(r);
     if( it != m_imageViews.end())
@@ -767,7 +791,7 @@ VkImageView ImageInfo::getImageView(uint32_t layer, uint32_t layerCount, uint32_
     VkImageViewCreateInfo ci{};
     ci.sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     ci.image      = image;
-    ci.viewType   = viewType;
+    ci.viewType   = type==VK_IMAGE_VIEW_TYPE_MAX_ENUM ? viewType : type;
     ci.format     = info.format;
     ci.components = {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A};
 
