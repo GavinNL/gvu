@@ -264,6 +264,24 @@ public:
     {
         return m_sharedData->allocator;
     }
+
+    static bool isDepth(VkFormat f)
+    {
+        switch(f)
+        {
+            case VK_FORMAT_D16_UNORM:
+            case VK_FORMAT_D32_SFLOAT:
+            case VK_FORMAT_D16_UNORM_S8_UINT:
+            case VK_FORMAT_D24_UNORM_S8_UINT:
+            case VK_FORMAT_D32_SFLOAT_S8_UINT:
+                return true;
+                break;
+            default:
+                return false;
+                break;
+        }
+    }
+
 protected:
 
     void destroyTexture(ImageInfo & I)
@@ -278,6 +296,11 @@ protected:
         {
             vkDestroyImageView(dev, v, nullptr);
         }
+        for(auto & v : I.m_imageViews)
+        {
+            vkDestroyImageView(dev, v.second, nullptr);
+        }
+
         std::cerr << "Destroying Image: " << I.image << std::endl;
         vmaDestroyImage(m_sharedData->allocator, I.image, I.allocation);
 
@@ -731,6 +754,39 @@ inline void ImageInfo::cmdTransitionImage(std::shared_ptr<ImageInfo> other,uint3
     copy_barrier.subresourceRange.baseArrayLayer = arrayLayer;
     copy_barrier.subresourceRange.baseMipLevel   = mipLevel;
     vkCmdPipelineBarrier(m_updateCommandBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &copy_barrier);
+}
+
+VkImageView ImageInfo::getImageView(uint32_t layer, uint32_t layerCount, uint32_t mip, uint32_t mipCount)
+{
+    ImageViewRange r{layer,layerCount,mip,mipCount};
+
+    auto it = m_imageViews.find(r);
+    if( it != m_imageViews.end())
+        return it->second;
+
+    VkImageViewCreateInfo ci{};
+    ci.sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    ci.image      = image;
+    ci.viewType   = viewType;
+    ci.format     = info.format;
+    ci.components = {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A};
+
+    ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+    ci.subresourceRange.baseMipLevel = mip;
+    ci.subresourceRange.levelCount = mipCount;
+
+    ci.subresourceRange.baseArrayLayer = layer;
+    ci.subresourceRange.layerCount = layerCount;
+
+    ci.subresourceRange.aspectMask = MemoryCache::isDepth(info.format) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+
+    auto device = sharedData->commandPool.getDevice();
+    VkImageView v = VK_NULL_HANDLE;
+    auto suc = vkCreateImageView(device, &ci, nullptr, &v);
+    assert(suc == VK_SUCCESS);
+    m_imageViews[r] = v;
+    return v;
 }
 
 }

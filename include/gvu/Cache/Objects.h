@@ -14,7 +14,9 @@
 #include <algorithm>
 #include <memory>
 #include <unordered_set>
+#include <map>
 #include <chrono>
+#include <tuple>
 #include <vk_mem_alloc.h>
 
 #include <gvu/FormatInfo.h>
@@ -23,6 +25,18 @@ namespace gvu
 {
 
 struct SharedData;
+
+struct ImageViewRange
+{
+    uint32_t layer;
+    uint32_t layerCount;
+    uint32_t mip;
+    uint32_t mipCount;
+    bool operator<(ImageViewRange const & r) const
+    {
+        return std::tie(layer,layerCount, mip, mipCount) < std::tie(r.layer, r.layerCount, r.mip, r.mipCount);
+    }
+};
 
 struct ImageInfo
 {
@@ -34,6 +48,18 @@ struct ImageInfo
      */
     void setData(void * data);
 
+
+    /**
+     * @brief getImageView
+     * @param layer
+     * @param layerCount
+     * @param mip
+     * @param mipCount
+     * @return
+     *
+     * Creates or returns an image view for the specific range
+     */
+    VkImageView getImageView(uint32_t layer, uint32_t layerCount, uint32_t mip, uint32_t mipCount);
 
     /**
      * @brief copyData
@@ -203,6 +229,121 @@ struct ImageInfo
     //=====================================================================================================================
 
 
+
+    void transition(VkCommandBuffer c,
+                    VkImageLayout oldLayout, VkImageLayout newLayout,
+                    uint32_t baseMipLevel, uint32_t mipLevelCount,
+                    uint32_t baseArrayLayer=0, uint32_t arrayLayerCount=VK_REMAINING_ARRAY_LAYERS,
+                    VkPipelineStageFlags srcStage=VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VkPipelineStageFlags dstStage=VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT
+                    )
+    {
+        VkImageSubresourceRange range{};
+        auto format = getFormat();
+
+        switch(format)
+        {
+            case VK_FORMAT_D16_UNORM:
+            case VK_FORMAT_D32_SFLOAT:
+            case VK_FORMAT_D16_UNORM_S8_UINT:
+            case VK_FORMAT_D24_UNORM_S8_UINT:
+            case VK_FORMAT_D32_SFLOAT_S8_UINT:
+                range.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;// vk::ImageAspectFlagBits::eDepth;
+                break;
+            default:
+                range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT; //vk::ImageAspectFlagBits::eColor;
+                break;
+        }
+        //range.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+        range.baseMipLevel   = baseMipLevel;
+        range.levelCount     = mipLevelCount;
+        range.baseArrayLayer = baseArrayLayer;
+        range.layerCount     = arrayLayerCount;
+
+        if(range.aspectMask == VK_IMAGE_ASPECT_COLOR_BIT)
+        {
+            insert_image_memory_barrier(c,
+                                        getImage(),
+                                        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                        0,
+                                        oldLayout,
+                                        newLayout,
+                                        srcStage,
+                                        dstStage,
+                                        range);
+        }
+        else
+        {
+            insert_image_memory_barrier(c,
+                                        getImage(),
+                                        0,
+                                        0,
+                                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                        range);
+        }
+    }
+
+    /**
+     * @brief transitionMipLevel
+     * @param c
+     * @param oldLayout
+     * @param newLayout
+     * @param mipLevel
+     * @param mipLevelCount
+     * @param srcStage
+     * @param dstStage
+     *
+     * Specific specific mimpmap levels to another layout. This will convert ALL layers to the new layout
+     */
+    void transitionMipLevel(VkCommandBuffer c,
+                            VkImageLayout oldLayout, VkImageLayout newLayout,
+                            uint32_t mipLevel, uint32_t mipLevelCount=1,
+                            VkPipelineStageFlags srcStage=VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VkPipelineStageFlags dstStage=VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT)
+    {
+        transition(c, oldLayout, newLayout, mipLevel, mipLevelCount, 0, VK_REMAINING_ARRAY_LAYERS,srcStage, dstStage);
+    }
+
+    /**
+     * @brief transitionArrayLayer
+     * @param c
+     * @param oldLayout
+     * @param newLayout
+     * @param arrayLayer
+     * @param arrayLayerCount
+     * @param srcStage
+     * @param dstStage
+     *
+     * Transitions speciifc array layers to another layout. This will convert ALL mipmaps for that layotu
+     */
+    void transitionArrayLayer(VkCommandBuffer c,
+                            VkImageLayout oldLayout, VkImageLayout newLayout,
+                            uint32_t arrayLayer, uint32_t arrayLayerCount=1,
+                            VkPipelineStageFlags srcStage=VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VkPipelineStageFlags dstStage=VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT)
+    {
+        transition(c, oldLayout, newLayout, 0, VK_REMAINING_MIP_LEVELS, arrayLayer, arrayLayerCount,srcStage, dstStage);
+    }
+
+    /**
+     * @brief transitionArrayLayerMipLevel
+     * @param c
+     * @param oldLayout
+     * @param newLayout
+     * @param arrayLayer
+     * @param mipLevel
+     * @param srcStage
+     * @param dstStage
+     *
+     * Transitions a single array/miplevel to another layout
+     */
+    void transitionArrayLayerMipLevel(VkCommandBuffer c,
+                            VkImageLayout oldLayout, VkImageLayout newLayout,
+                            uint32_t arrayLayer, uint32_t mipLevel,
+                            VkPipelineStageFlags srcStage=VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VkPipelineStageFlags dstStage=VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT)
+    {
+        transition(c, oldLayout, newLayout, mipLevel, 1, arrayLayer, 1,srcStage, dstStage);
+    }
 
     /**
      * @brief transitionForRendering
@@ -379,7 +520,7 @@ protected:
     VmaAllocationInfo        allocInfo  = {};
     VkImageViewType          viewType;
     std::vector<VkImageView> mipMapViews; // one image view per mipmap
-    std::unordered_map<uint32_t, VkImageView> arrayLayerView; // one view per layer
+    std::map<ImageViewRange, VkImageView> m_imageViews;
     uint64_t byteSize = 0;
     struct
     {
@@ -498,6 +639,15 @@ struct BufferInfo
      */
     void resize(VkDeviceSize bytes);
 
+    template<typename T>
+    uint32_t pushStorage(T const *v, size_t count)
+    {
+        return static_cast<uint32_t>(push_back(v, count, sizeof(T) ));
+    }
+    void clearStorageIterator()
+    {
+        m_itr = 0;
+    }
 protected:
     VkBuffer                                  buffer         = VK_NULL_HANDLE;
     VmaAllocation                             allocation     = nullptr;
