@@ -40,9 +40,9 @@ struct SharedData
 /**
  * @brief The MemoryCache class
  *
- * The texture cache is used to allocate ALL textures.
+ * The memory cache is used to allocate ALL textures and buffers
  *
- * It works by allocating a texture whenever you need it. Then
+ * For textures, It works by allocating a texture whenever you need it. Then
  * when you are finished with the texture you "return" it to the cache.
  * The texture is not destroyed and the image is not freed. The next time
  * you allocate a texture with the same dimensions/type/etc, it will search
@@ -373,58 +373,6 @@ protected:
         I.allocation = allocation;
         I.viewType   = viewType;
         I.byteSize   = allocInfo.size;
-
-        // create the image view
-        /*
-        {
-            {
-                VkImageViewCreateInfo ci{};
-                ci.sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-                ci.image      = I.image;
-                ci.viewType   = viewType;
-                ci.format     = format;
-                ci.components = {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A};
-
-                ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-
-                ci.subresourceRange.baseMipLevel = 0;
-                ci.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-
-                ci.subresourceRange.baseArrayLayer = 0;
-                ci.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
-
-                switch(ci.format)
-                {
-                    case VK_FORMAT_D16_UNORM:
-                    case VK_FORMAT_D32_SFLOAT:
-                    case VK_FORMAT_D16_UNORM_S8_UINT:
-                    case VK_FORMAT_D24_UNORM_S8_UINT:
-                    case VK_FORMAT_D32_SFLOAT_S8_UINT:
-                        ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;// vk::ImageAspectFlagBits::eDepth;
-                        break;
-                    default:
-                        ci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT; //vk::ImageAspectFlagBits::eColor;
-                        break;
-                }
-
-                suc = vkCreateImageView(device, &ci, nullptr, &I.imageView);
-                assert(suc == VK_SUCCESS);
-
-                // Create one image view per mipmap level
-                for(uint32_t i=0;i<miplevels;i++)
-                {
-                    ci.subresourceRange.baseMipLevel = i;
-                    ci.subresourceRange.levelCount = 1;
-
-                    VkImageView vv;
-                    suc = vkCreateImageView(device, &ci, nullptr, &vv);
-                    assert(suc == VK_SUCCESS);
-                    I.mipMapViews.push_back(vv);
-                }
-            }
-        }
-        */
-
 
         // create a sampler
         {
