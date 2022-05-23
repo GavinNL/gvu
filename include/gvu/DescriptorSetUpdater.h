@@ -116,7 +116,7 @@ struct DescriptorSetUpdater
     }
 protected:
     VkDescriptorSet                           set = VK_NULL_HANDLE;
-    uint32_t                                  binding;
+    uint32_t                                  binding = 0;
     uint32_t                                  dstArrayElement = 0;
     VkDescriptorType                          descriptorType;
     std::vector<VkDescriptorImageInfo>        imageWrites;
