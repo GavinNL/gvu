@@ -89,12 +89,13 @@ public:
     {
         auto p = m_setToPool.at(set);
         auto & i = m_poolInfos.at(p);
-        ++i.returnedSets;
+
+        i.returnedSets.insert(set);
 
         // if all the sets have been returned
         // then set the time at which the last
         // set was returned.
-        if( i.returnedSets == m_createInfo.maxSets )
+        if( i.returnedSets.size() == m_createInfo.maxSets )
         {
             resetPool(p);
         }
@@ -119,7 +120,7 @@ public:
             allocInfo.pSetLayouts        = &m_layout;
             allocInfo.descriptorSetCount = 1;
 
-            if( i.allocatedSets < i.maxSets)
+            if( i.allocatedSets.size() < i.maxSets)
             {
                 auto result = vkAllocateDescriptorSets(m_device, &allocInfo, &set);
 
@@ -127,9 +128,8 @@ public:
                 {
                     case VK_SUCCESS:
                         //all good, return
-                        ++i.allocatedSets;
+                        i.allocatedSets.insert(set);
                         m_setToPool[set] = p;
-                        i.sets.insert(set);
                         return set;
                     case VK_ERROR_FRAGMENTED_POOL:
                     case VK_ERROR_OUT_OF_POOL_MEMORY:
@@ -179,8 +179,8 @@ public:
 
         for(auto & [p,i] : m_poolInfos)
         {
-            if(i.returnedSets == m_createInfo.maxSets &&
-               i.allocatedSets == m_createInfo.maxSets)
+            if(i.returnedSets.size() == m_createInfo.maxSets &&
+               i.allocatedSets.size() == m_createInfo.maxSets)
             {
                 resetPool(p);
             }
@@ -189,17 +189,25 @@ public:
 
     bool isResetable(VkDescriptorPool p) const
     {
-        return m_poolInfos.at(p).returnedSets == m_poolInfos.at(p).maxSets;
+        return m_poolInfos.at(p).returnedSets.size() == m_poolInfos.at(p).maxSets;
     }
     size_t allocatedSetsCount(VkDescriptorPool p) const
     {
-        return m_poolInfos.at(p).maxSets-m_poolInfos.at(p).returnedSets;
+        return m_poolInfos.at(p).maxSets-m_poolInfos.at(p).returnedSets.size();
     }
     size_t allocatedPoolCount() const
     {
         return m_poolInfos.size();
     }
-
+    size_t allocatedSetCount() const
+    {
+        size_t c=0;
+        for(auto & p : m_poolInfos)
+        {
+            c+=p.second.allocatedSets.size();
+        }
+        return c;
+    }
 protected:
     void freePools()
     {
@@ -212,15 +220,14 @@ protected:
     void resetPool(VkDescriptorPool p)
     {
         auto & I = m_poolInfos.at(p);
-        for(auto s : I.sets)
+        for(auto s : I.returnedSets)
         {
             m_setToPool.erase(s);
         }
 
         vkResetDescriptorPool(m_device, p, {});
-        m_poolInfos.at(p).allocatedSets = 0;
-        m_poolInfos.at(p).returnedSets = 0;
-        m_poolInfos.at(p).sets.clear();
+        m_poolInfos.at(p).allocatedSets.clear();
+        m_poolInfos.at(p).returnedSets.clear();
     }
 
     VkDescriptorPool createNewPool()
@@ -239,7 +246,7 @@ protected:
         auto & i = m_poolInfos[pool];
         i.pool = pool;
         i.maxSets = m_createInfo.maxSets;
-        i.allocatedSets = 0;
+        i.allocatedSets.clear();
 
         return pool;
     }
@@ -248,10 +255,10 @@ protected:
     struct PoolInfo
     {
         VkDescriptorPool                    pool;
-        uint32_t                            allocatedSets = 0;
-        uint32_t                            returnedSets  = 0;
         uint32_t                            maxSets       = 0;
-        std::unordered_set<VkDescriptorSet> sets;
+
+        std::unordered_set<VkDescriptorSet> allocatedSets;
+        std::unordered_set<VkDescriptorSet> returnedSets;
     };
 
     std::unordered_map<VkDescriptorPool, PoolInfo> m_poolInfos;
@@ -319,6 +326,24 @@ public:
         m_pools.at(l)->releaseToPool(set);
     }
 
+    size_t descriptorPoolCount() const
+    {
+        size_t c=0;
+        for(auto & [l, p]: m_pools)
+        {
+            c += p->allocatedPoolCount();
+        }
+        return c;
+    }
+    size_t descriptorSetCount() const
+    {
+        size_t c=0;
+        for(auto & [l, p]: m_pools)
+        {
+            c += p->allocatedSetCount();
+        }
+        return c;
+    }
 protected:
 
     DescriptorSetLayoutCache * m_cache;
