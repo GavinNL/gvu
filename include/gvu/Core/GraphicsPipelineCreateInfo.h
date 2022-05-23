@@ -336,6 +336,7 @@ struct GraphicsPipelineCreateInfo
             colorBlendAttachmentStates.resize(outputColorTargetFormats.size(), colorBlendAttachment);
         }
     }
+
     void setDepthFormat(VkFormat format)
     {
         depthFormat = format;

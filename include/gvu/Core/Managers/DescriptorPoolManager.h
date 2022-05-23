@@ -79,14 +79,21 @@ public:
      * @brief releaseToPool
      * @param set
      *
-     * Release a descriptor set back to its pool. After using this
+     * Return a descriptor set back to its pool. After using this
      * the descriptor set is no longer usable!
+     *
+     * If all descriptor sets from a particular pool have been
+     * returned. Then the pool will be reset
      */
     void releaseToPool(VkDescriptorSet set)
     {
         auto p = m_setToPool.at(set);
         auto & i = m_poolInfos.at(p);
         ++i.returnedSets;
+
+        // if all the sets have been returned
+        // then set the time at which the last
+        // set was returned.
         if( i.returnedSets == m_createInfo.maxSets )
         {
             resetPool(p);
@@ -179,6 +186,7 @@ public:
             }
         }
     }
+
     bool isResetable(VkDescriptorPool p) const
     {
         return m_poolInfos.at(p).returnedSets == m_poolInfos.at(p).maxSets;
@@ -239,10 +247,10 @@ protected:
 
     struct PoolInfo
     {
-        VkDescriptorPool pool;
-        uint32_t allocatedSets=0;
-        uint32_t returnedSets=0;
-        uint32_t maxSets=0;
+        VkDescriptorPool                    pool;
+        uint32_t                            allocatedSets = 0;
+        uint32_t                            returnedSets  = 0;
+        uint32_t                            maxSets       = 0;
         std::unordered_set<VkDescriptorSet> sets;
     };
 
@@ -270,12 +278,23 @@ public:
         }
         m_pools.clear();
     }
+
     VkDescriptorSet allocate(DescriptorSetLayoutCreateInfo const &ci)
     {
         auto l = m_cache->create(ci);
         return allocate(l);
     }
 
+    /**
+     * @brief allocate
+     * @param layout
+     * @return
+     *
+     * Allocate a descriptor set for a specific layout. The layout
+     * must have either been created using DescriptorSetAllocator::allocate(DescriptorSetLayoutCreateInfo)
+     * or must have been created usign the DescirptorSetLayoutCache
+     *
+     */
     VkDescriptorSet allocate(VkDescriptorSetLayout layout)
     {
         auto i = m_pools.find(layout);

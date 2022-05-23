@@ -282,6 +282,12 @@ public:
         }
     }
 
+
+    size_t getAllocatedTextureCount() const
+    {
+        return m_sharedData->images.size();
+    }
+
 protected:
 
     void destroyTexture(ImageInfo & I)

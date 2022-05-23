@@ -5,6 +5,7 @@
 #include <iostream>
 #include <cassert>
 #include <vector>
+#include <unordered_set>
 #include <vulkan/vulkan.h>
 
 namespace gvu
@@ -34,6 +35,12 @@ namespace gvu
 #endif
 
 
+/**
+ * @brief The ScopedFence struct
+ *
+ * A ScopedFence is used to wait on a fence
+ * when the object is destroyed.
+ */
 struct ScopedFence
 {
     ~ScopedFence()
@@ -241,8 +248,30 @@ struct CommandPoolManager
             commandBufferBI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             GVK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuffer, &commandBufferBI));
         }
-
+        m_allocatedBuffers.insert(cmdBuffer);
         return cmdBuffer;
+    }
+
+    /**
+     * @brief returnBuffer
+     * @param cmd
+     *
+     * Return a buffer to the command pool. When all allocated command buffers
+     * have been returned to the pool, the pool can be reset
+     */
+    void returnBuffer(VkCommandBuffer cmd)
+    {
+        m_returnedBuffers.insert(cmd);
+    }
+
+    size_t getAllocatedBuffersCount() const
+    {
+        return m_allocatedBuffers.size();
+    }
+
+    size_t getReturnedBuffersCount() const
+    {
+        return m_returnedBuffers.size();
     }
 
     /**
@@ -256,9 +285,17 @@ struct CommandPoolManager
         vkFreeCommandBuffers(m_device, m_pool, 1, &cmd);
     }
 
+    /**
+     * @brief resetPool
+     *
+     * Force resetting the pool. All command buffers that have been allocated
+     * will be invalidated.
+     */
     void resetPool()
     {
         vkResetCommandPool(m_device, m_pool, {});
+        m_allocatedBuffers.clear();
+        m_returnedBuffers.clear();
     }
 
     /**
@@ -278,6 +315,8 @@ struct CommandPoolManager
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submitInfo.commandBufferCount = 1;
         submitInfo.pCommandBuffers = &commandBuffer;
+
+        returnBuffer(commandBuffer);
 
         if(generateFence)
         {
@@ -327,7 +366,7 @@ protected:
 
 
 
-    VkCommandPool createCommandPool( VkQueueFlags queueFlagBits, VkCommandPoolCreateFlags createFlags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT)
+    VkCommandPool createCommandPool( VkQueueFlags queueFlagBits, VkCommandPoolCreateFlags createFlags = {}/*VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT*/)
     {
         VkCommandPoolCreateInfo cmdPoolInfo = {};
         cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -372,6 +411,8 @@ protected:
         throw std::runtime_error("Could not find a matching queue family index");
     }
     VkCommandPool    m_pool           = VK_NULL_HANDLE;
+    std::unordered_set<VkCommandBuffer> m_allocatedBuffers;
+    std::unordered_set<VkCommandBuffer> m_returnedBuffers;
     VkDevice         m_device         = VK_NULL_HANDLE;
     VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
     VkQueue          m_graphicsQueue  = VK_NULL_HANDLE;
@@ -398,6 +439,26 @@ struct CommandPoolManager2
         m_graphicsQueue = VK_NULL_HANDLE;
     }
 
+    size_t getCommandPoolCount() const
+    {
+        return m_commandPools.size();
+    }
+    size_t getActiveCommandBufferCount() const
+    {
+        size_t c=0;
+        for(auto & x : m_commandPools){
+            c += x->getAllocatedBuffersCount();
+        }
+        return c;
+    }
+    size_t getReturnedCommandBufferCount() const
+    {
+        size_t c=0;
+        for(auto & x : m_commandPools){
+            c += x->getReturnedBuffersCount();
+        }
+        return c;
+    }
     /**
      * @brief getCommandPool
      * @return
@@ -436,6 +497,7 @@ struct CommandPoolManager2
     //==========================
 
     std::vector< std::shared_ptr<CommandPoolManager> > m_commandPools;
+
     VkDevice         m_device         = VK_NULL_HANDLE;
     VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
     VkQueue          m_graphicsQueue  = VK_NULL_HANDLE;
