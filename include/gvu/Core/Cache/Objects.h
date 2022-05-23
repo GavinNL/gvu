@@ -19,7 +19,7 @@
 #include <tuple>
 #include <vk_mem_alloc.h>
 
-#include <gvu/FormatInfo.h>
+#include <gvu/Core/FormatInfo.h>
 
 namespace gvu
 {

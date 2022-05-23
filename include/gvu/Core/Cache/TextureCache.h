@@ -17,9 +17,9 @@
 #include <chrono>
 #include <vk_mem_alloc.h>
 
-#include <gvu/FormatInfo.h>
-#include <gvu/Managers/CommandPoolManager.h>
-#include <gvu/Managers/DescriptorPoolManager.h>
+#include <gvu/Core/FormatInfo.h>
+#include <gvu/Core/Managers/CommandPoolManager.h>
+#include <gvu/Core/Managers/DescriptorPoolManager.h>
 #include "Objects.h"
 
 namespace gvu
