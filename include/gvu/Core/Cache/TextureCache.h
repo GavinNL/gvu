@@ -232,22 +232,7 @@ public:
                             true);
             }
 
-            {
-                id->singleDescriptorSet =  m_sharedData->descriptorPool.allocateDescriptorSet();
 
-                VkDescriptorImageInfo imageInfo = {};
-                imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                imageInfo.imageView = id->getImageView();
-                imageInfo.sampler   = id->getLinearSampler();
-
-                VkWriteDescriptorSet wr = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-                wr.descriptorCount      = 1;
-                wr.descriptorType       = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-                wr.dstSet               = id->singleDescriptorSet;
-                wr.pImageInfo           = &imageInfo;
-
-                vkUpdateDescriptorSets(getDevice(), 1, &wr, 0, nullptr);
-            }
 
             id->sharedData = m_sharedData;
             return id;

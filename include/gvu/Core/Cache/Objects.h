@@ -508,10 +508,7 @@ struct ImageInfo
     {
         return sampler.linear;
     }
-    VkDescriptorSet getSingleDescriptorSet() const
-    {
-        return singleDescriptorSet;
-    }
+
     uint32_t pixelSize() const
     {
         return getFormatInfo(info.format).blockSizeInBits / 8;
@@ -549,7 +546,7 @@ protected:
     std::map< std::pair<uint32_t, uint32_t>, VkDescriptorSet > arrayMipDescriptorSet;
     // a single descriptor set which is used for this
     // image so that it can be passed to IMGUI
-    VkDescriptorSet singleDescriptorSet = VK_NULL_HANDLE;
+    //VkDescriptorSet singleDescriptorSet = VK_NULL_HANDLE;
 
     std::shared_ptr<SharedData> sharedData;
     bool selfManaged = true;
