@@ -43,6 +43,11 @@ struct BeginRendering
         colorAttachments[index].clearValue.color = col;
         return *this;
     }
+    BeginRendering& setRenderArea( VkRect2D const & area)
+    {
+        renderInfo.renderArea = area;
+        return *this;
+    }
 
     BeginRendering& setClearDepth( VkClearDepthStencilValue col)
     {
@@ -88,9 +93,10 @@ struct BeginRendering
 
     VkViewport getViewport() const
     {
-        return VkViewport{0.f,0.f,
-                        static_cast<float>(renderInfo.renderArea.extent.width),
-                        static_cast<float>(renderInfo.renderArea.extent.height),0.f,1.0f};
+        return VkViewport{ static_cast<float>(renderInfo.renderArea.offset.x),
+                           static_cast<float>(renderInfo.renderArea.offset.y),
+                          static_cast<float>(renderInfo.renderArea.extent.width),
+                          static_cast<float>(renderInfo.renderArea.extent.height),0.f,1.0f};
     }
     VkRect2D getRenderArea() const
     {
