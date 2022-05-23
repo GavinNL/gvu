@@ -2,10 +2,10 @@
 #include <fstream>
 
 #include "unit_helpers.h"
-#include <gvu/Cache/RenderPassCache.h>
-#include <gvu/Cache/DescriptorSetLayoutCache.h>
-#include <gvu/Cache/PipelineLayoutCache.h>
-#include <gvu/GraphicsPipelineCreateInfo.h>
+#include <gvu/Core/Cache/RenderPassCache.h>
+#include <gvu/Core/Cache/DescriptorSetLayoutCache.h>
+#include <gvu/Core/Cache/PipelineLayoutCache.h>
+#include <gvu/Core/GraphicsPipelineCreateInfo.h>
 
 SCENARIO( " Create a graphics pipeline using a renderpass" )
 {

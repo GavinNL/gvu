@@ -2,7 +2,7 @@
 #include <fstream>
 
 #include "unit_helpers.h"
-#include <gvu/Cache/RenderPassCache.h>
+#include <gvu/Core/Cache/RenderPassCache.h>
 
 SCENARIO( " Scenario 1: Create a Sampler" )
 {

@@ -2,11 +2,11 @@
 #include <fstream>
 
 #include "unit_helpers.h"
-#include <gvu/Cache/RenderPassCache.h>
-#include <gvu/Cache/DescriptorSetLayoutCache.h>
-#include <gvu/Cache/PipelineLayoutCache.h>
-#include <gvu/GraphicsPipelineCreateInfo.h>
-#include <gvu/spirvPipelineReflector.h>
+#include <gvu/Core/Cache/RenderPassCache.h>
+#include <gvu/Core/Cache/DescriptorSetLayoutCache.h>
+#include <gvu/Core/Cache/PipelineLayoutCache.h>
+#include <gvu/Core/GraphicsPipelineCreateInfo.h>
+#include <gvu/Extension/spirvPipelineReflector.h>
 
 
 SCENARIO( " Scenario 1: Create a Sampler" )

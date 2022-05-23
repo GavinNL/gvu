@@ -2,9 +2,9 @@
 #include <fstream>
 
 #include "unit_helpers.h"
-#include <gvu/Cache/DescriptorSetLayoutCache.h>
-#include <gvu/Cache/PipelineLayoutCache.h>
-#include <gvu/Managers/DescriptorPoolManager.h>
+#include <gvu/Core/Cache/DescriptorSetLayoutCache.h>
+#include <gvu/Core/Cache/PipelineLayoutCache.h>
+#include <gvu/Core/Managers/DescriptorPoolManager.h>
 
 SCENARIO( " Scenario 1: Create a DescriptorSetLayout" )
 {

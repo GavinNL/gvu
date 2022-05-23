@@ -7,8 +7,8 @@
 #include <vector>
 #include <cstdint>
 #include <iostream>
-#include "Cache/DescriptorSetLayoutCache.h"
-#include "Cache/PipelineLayoutCache.h"
+#include <gvu/Core/Cache/DescriptorSetLayoutCache.h>
+#include <gvu/Core/Cache/PipelineLayoutCache.h>
 
 namespace gvu
 {

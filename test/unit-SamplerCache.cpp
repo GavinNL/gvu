@@ -2,7 +2,7 @@
 #include <fstream>
 
 #include "unit_helpers.h"
-#include <gvu/Cache/SamplerCache.h>
+#include <gvu/Core/Cache/SamplerCache.h>
 
 SCENARIO( " Scenario 1: Create a Sampler" )
 {
