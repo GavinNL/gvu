@@ -7,6 +7,8 @@
 #include <gvu/Core/GraphicsPipelineCreateInfo.h>
 #include <GLSLCompiler.h>
 
+namespace gvu
+{
 struct VulkanApplicationContext;
 
 struct PipelineBase
@@ -44,7 +46,7 @@ protected:
 };
 
 
-struct Pipeline;
+struct GraphicsPipeline;
 
 struct ShaderStage
 {
@@ -177,7 +179,7 @@ protected:
  * This pipeline struct is a help object and wrapper around
  * a VkPipeline.
  */
-struct Pipeline : public PipelineBase
+struct GraphicsPipeline : public PipelineBase
 {
 
 public:
@@ -247,6 +249,6 @@ protected:
     friend struct VulkanApplicationContext;
 };
 
-
+}
 
 #endif

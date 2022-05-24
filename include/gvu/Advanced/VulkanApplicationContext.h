@@ -16,6 +16,8 @@
 
 #include "Pipeline.h"
 
+namespace gvu
+{
 struct VulkanApplicationContext;
 
 
@@ -25,6 +27,9 @@ struct VulkanApplicationContext;
  * The VulkanApplicationContext is a struct which
  * holds all the managers/caches which can be used
  * to create vulkan objects.
+ *
+ * It also provides additional functions/objects for
+ * Pipelines and ComputePipelines
  *
  */
 struct VulkanApplicationContext : std::enable_shared_from_this<VulkanApplicationContext>
@@ -106,9 +111,9 @@ struct VulkanApplicationContext : std::enable_shared_from_this<VulkanApplication
      * Returns a shared pipeline object with the appropriate
      * pointers created.
      */
-    std::shared_ptr<Pipeline> makePipeline()
+    std::shared_ptr<GraphicsPipeline> makeGraphicsPipeline()
     {
-        std::shared_ptr<Pipeline> p = std::make_shared<Pipeline>();
+        auto p = std::make_shared<GraphicsPipeline>();
         p->context = shared_from_this();
         p->vertexStage.context = p->context;
         p->fragmentStage.context = p->context;
@@ -140,12 +145,12 @@ struct VulkanApplicationContext : std::enable_shared_from_this<VulkanApplication
     }
 };
 
-inline void Pipeline::destroy()
+inline void GraphicsPipeline::destroy()
 {
     vkDestroyPipeline(context->getDevice(), pipeline, nullptr);
 }
 
-inline void Pipeline::build()
+inline void GraphicsPipeline::build()
 {
     {
 
@@ -264,6 +269,7 @@ inline VkShaderModule PipelineBase::_createShader(std::vector<uint32_t> code)
         throw std::runtime_error("Failed at compiling shader");
     }
     return sh;
+}
 }
 
 #endif
