@@ -145,6 +145,7 @@ struct VulkanApplicationContext : std::enable_shared_from_this<VulkanApplication
     }
 };
 
+
 inline void GraphicsPipeline::destroy()
 {
     vkDestroyPipeline(context->getDevice(), pipeline, nullptr);
@@ -169,6 +170,7 @@ inline void GraphicsPipeline::build()
     {
         auto l = context->descriptorSetLayoutCache.create(c);
         setLayouts[set] = l;
+        set++;
     }
 
 
