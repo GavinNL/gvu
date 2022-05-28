@@ -95,8 +95,8 @@ struct BeginRendering
     {
         return VkViewport{ static_cast<float>(renderInfo.renderArea.offset.x),
                            static_cast<float>(renderInfo.renderArea.offset.y),
-                          static_cast<float>(renderInfo.renderArea.extent.width),
-                          static_cast<float>(renderInfo.renderArea.extent.height),0.f,1.0f};
+                           static_cast<float>(renderInfo.renderArea.extent.width),
+                           static_cast<float>(renderInfo.renderArea.extent.height),0.f,1.0f};
     }
     VkRect2D getRenderArea() const
     {

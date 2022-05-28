@@ -249,6 +249,8 @@ protected:
     friend struct VulkanApplicationContext;
 };
 
+using GraphicsPipelineHandle = std::shared_ptr<GraphicsPipeline>;
+using ComputePipelineHandle  = std::shared_ptr<ComputePipeline>;
 }
 
 #endif
