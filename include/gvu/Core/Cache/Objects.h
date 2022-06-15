@@ -47,8 +47,7 @@ struct ImageInfo
      *
      * Sets the data for the first mapmap level for this image.
      */
-    void setData(void * data);
-
+    void setData(const void *data, VkDeviceSize bytes);
 
     /**
      * @brief getImageView

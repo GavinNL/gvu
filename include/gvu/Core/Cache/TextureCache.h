@@ -469,11 +469,11 @@ inline void BufferInfo::resize(VkDeviceSize bytes)
     }
 }
 
-void ImageInfo::setData(void * data)
+void ImageInfo::setData(void const * data, VkDeviceSize bytes)
 {
     auto allocator = sharedData->allocator;
 
-    auto byteSize = getExtents().width * getExtents().height * getFormatInfo(info.format).blockSizeInBits/8;
+    auto byteSize = bytes;//getByteSize();// getExtents().depth * getExtents().width * getExtents().height * getFormatInfo(info.format).blockSizeInBits/8;
 
     if(sharedData->_stagingBuffer)
     {
@@ -501,8 +501,8 @@ void ImageInfo::setData(void * data)
             copy_barrier.dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
             copy_barrier.image                       = getImage();
             copy_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            copy_barrier.subresourceRange.levelCount = 1;
-            copy_barrier.subresourceRange.layerCount = 1;
+            copy_barrier.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+            copy_barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
             copy_barrier.subresourceRange.baseArrayLayer = 0;
             copy_barrier.subresourceRange.baseMipLevel = 0;
             vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &copy_barrier);
@@ -510,7 +510,9 @@ void ImageInfo::setData(void * data)
 
             VkBufferImageCopy region = {};
             region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            region.imageSubresource.layerCount = 1;
+            region.imageSubresource.layerCount = getLayerCount();
+            region.imageSubresource.mipLevel   = 0;
+            region.imageSubresource.baseArrayLayer = 0;
             region.imageExtent.width           = getExtents().width;
             region.imageExtent.height          = getExtents().height;
             region.imageExtent.depth           = getExtents().depth;
@@ -526,8 +528,8 @@ void ImageInfo::setData(void * data)
             use_barrier.dstQueueFamilyIndex              = VK_QUEUE_FAMILY_IGNORED;
             use_barrier.image                            = getImage();
             use_barrier.subresourceRange.aspectMask      = VK_IMAGE_ASPECT_COLOR_BIT;
-            use_barrier.subresourceRange.levelCount      = 1;
-            use_barrier.subresourceRange.layerCount      = 1;
+            use_barrier.subresourceRange.levelCount      = VK_REMAINING_MIP_LEVELS;
+            use_barrier.subresourceRange.layerCount      = VK_REMAINING_ARRAY_LAYERS;
             copy_barrier.subresourceRange.baseArrayLayer = 0;
             copy_barrier.subresourceRange.baseMipLevel   = 0;
             vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, NULL, 0, NULL, 1, &use_barrier);
