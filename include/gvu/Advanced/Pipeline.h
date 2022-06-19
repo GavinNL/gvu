@@ -52,8 +52,9 @@ struct ShaderStage
 {
     VkShaderStageFlagBits                        stage;
     std::string                                  glslCode;
-    gnl::GLSLCompiler                            compiler;
     std::vector<uint32_t>                        spirvCode;
+    std::vector<std::filesystem::path>           includePaths;
+    std::map<std::string, std::string>           compileTimeDefinitions;
 
     /**
      * @brief loadVertexGLSL
@@ -72,7 +73,7 @@ struct ShaderStage
         glslCode = std::move(srcString);
         if(includeFilePathAsIncludeDir)
         {
-            compiler.addIncludePath( p.parent_path() );
+            appendIncludePath(p.parent_path());
         }
         return *this;
     }
@@ -85,19 +86,29 @@ struct ShaderStage
 
     ShaderStage& appendIncludePath(std::filesystem::path const & p)
     {
-        compiler.addIncludePath(p.native());
+        includePaths.push_back(p);
         return *this;
     }
 
 
     ShaderStage& addCompileTimeDefinition(std::string const & var, std::string const &value)
     {
-        compiler.addCompleTimeDefinition(var, value);
+        compileTimeDefinitions[var] = value;
         return *this;
     }
 
     void compile()
     {
+        gnl::GLSLCompiler compiler;
+        for(auto & [key, value] : compileTimeDefinitions)
+        {
+            compiler.addCompleTimeDefinition(key, value);
+        }
+        for(auto & p : includePaths)
+        {
+            compiler.addIncludePath(p.native());
+        }
+
         EShLanguage _type;
         switch(stage)
         {
@@ -183,6 +194,12 @@ struct GraphicsPipeline : public PipelineBase
 {
 
 public:
+    std::shared_ptr<GraphicsPipeline> clone() const
+    {
+        auto p = std::make_shared<GraphicsPipeline>(*this);
+        p->pipeline = VK_NULL_HANDLE;
+        return p;
+    }
     VkPipelineLayout getPipelineLayout() const
     {
         return createInfo.pipelineLayout;
