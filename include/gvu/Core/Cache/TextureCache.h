@@ -414,7 +414,7 @@ protected:
     std::shared_ptr<SharedData>                      m_sharedData;
 };
 
-void BufferInfo::setData(void *data, VkDeviceSize byteSize, VkDeviceSize offset)
+inline void BufferInfo::setData(void *data, VkDeviceSize byteSize, VkDeviceSize offset)
 {
     auto allocator = sharedData->allocator;
 
@@ -469,7 +469,7 @@ inline void BufferInfo::resize(VkDeviceSize bytes)
     }
 }
 
-void ImageInfo::setData(void const * data, VkDeviceSize bytes)
+inline void ImageInfo::setData(void const * data, VkDeviceSize bytes)
 {
     auto allocator = sharedData->allocator;
 
@@ -540,7 +540,7 @@ void ImageInfo::setData(void const * data, VkDeviceSize bytes)
 }
 
 
-void ImageInfo::copyData(void * data, uint32_t width, uint32_t height,
+inline void ImageInfo::copyData(void * data, uint32_t width, uint32_t height,
                          uint32_t arrayLayer, uint32_t mipLevel,
                          uint32_t x_ImageOffset, uint32_t y_ImageOffset)
 {
@@ -614,7 +614,7 @@ void ImageInfo::copyData(void * data, uint32_t width, uint32_t height,
     }
 }
 
-void ImageInfo::cmdCopyData(void * data, uint32_t width, uint32_t height,
+inline void ImageInfo::cmdCopyData(void * data, uint32_t width, uint32_t height,
                          uint32_t arrayLayer, uint32_t mipLevel,
                          uint32_t x_ImageOffset, uint32_t y_ImageOffset)
 {
@@ -699,7 +699,7 @@ inline void ImageInfo::cmdTransitionImage(std::shared_ptr<ImageInfo> other,uint3
     vkCmdPipelineBarrier(m_updateCommandBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &copy_barrier);
 }
 
-VkDescriptorSet ImageInfo::getSingleImageSet(uint32_t layer, uint32_t mip)
+inline VkDescriptorSet ImageInfo::getSingleImageSet(uint32_t layer, uint32_t mip)
 {
     auto it = arrayMipDescriptorSet.find({layer,mip});
     if(it != arrayMipDescriptorSet.end() )
@@ -723,7 +723,7 @@ VkDescriptorSet ImageInfo::getSingleImageSet(uint32_t layer, uint32_t mip)
     return set;
 }
 
-VkImageView ImageInfo::getImageView(uint32_t layer, uint32_t layerCount, uint32_t mip, uint32_t mipCount, VkImageViewType type)
+inline VkImageView ImageInfo::getImageView(uint32_t layer, uint32_t layerCount, uint32_t mip, uint32_t mipCount, VkImageViewType type)
 {
     ImageViewRange r{layer,layerCount,mip,mipCount,type};
 
