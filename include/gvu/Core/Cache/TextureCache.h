@@ -20,6 +20,7 @@
 #include <gvu/Core/FormatInfo.h>
 #include <gvu/Core/Managers/CommandPoolManager.h>
 #include <gvu/Core/Managers/DescriptorPoolManager.h>
+#include <gvu/Core/Cache/SamplerCache.h>
 #include "Objects.h"
 
 namespace gvu
@@ -32,7 +33,7 @@ struct SharedData
     std::vector<TextureHandle> images;
     DescriptorSetLayoutCache   layoutCache;
     DescriptorPoolManager      descriptorPool;
-
+    SamplerCache               samplerCache;
     BufferHandle _stagingBuffer;
 };
 
@@ -66,6 +67,7 @@ public:
         m_sharedData = data;
         m_sharedData->allocator = allocator;
         m_sharedData->layoutCache.init(device);
+        m_sharedData->samplerCache.init(device);
 
         DescriptorSetLayoutCreateInfo dslci;
         dslci.bindings.push_back( VkDescriptorSetLayoutBinding{0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,1,VK_SHADER_STAGE_FRAGMENT_BIT, nullptr});
@@ -101,6 +103,7 @@ public:
         }
 
         m_sharedData->descriptorPool.destroy();
+        m_sharedData->samplerCache.destroy();
         m_sharedData->layoutCache.destroy();
         m_sharedData->commandPool.destroy();
     }
@@ -235,6 +238,7 @@ public:
 
 
             id->sharedData = m_sharedData;
+
             return id;
         }
 
@@ -539,6 +543,11 @@ inline void ImageInfo::setData(void const * data, VkDeviceSize bytes)
     }
 }
 
+
+VkSampler ImageInfo::getOrCreateSampler(VkSamplerCreateInfo c)
+{
+    return sharedData->samplerCache.create(c);
+}
 
 inline void ImageInfo::copyData(void * data, uint32_t width, uint32_t height,
                          uint32_t arrayLayer, uint32_t mipLevel,
