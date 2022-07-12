@@ -200,6 +200,22 @@ struct ImageInfo
                             VkImageLayout currentLayout,
                             VkImageLayout finalLayout);
 
+    /**
+     * @brief cmdBlitFromImage
+     * @param srcImage
+     * @param srcArrayLayer
+     * @param srcMipLevel
+     * @param srcOffset
+     * @param srcExtents
+     * @param dstImage
+     * @param dstArrayLayer
+     * @param dstMipLevel
+     * @param dstOffset
+     * @param dstExtents
+     *
+     * Copies image data from the srcImage to the dstImage
+     * This does NOT transition the images, this must be done on your own
+     */
     void cmdBlitFromImage(ImageInfo & srcImage,
                           uint32_t srcArrayLayer, uint32_t srcMipLevel,
                           VkOffset3D srcOffset,
@@ -256,6 +272,9 @@ struct ImageInfo
         VkExtent3D dstExtents = getExtents();
         VkOffset3D srcOffset = {};
         VkOffset3D dstOffset = {};
+
+        if(getMipLevels() <= 1)
+            return;
 
         if( mip0CurrentLayout != VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
             cmdTransitionImage(arrayLayer, 0, mip0CurrentLayout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);

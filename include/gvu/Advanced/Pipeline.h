@@ -239,6 +239,10 @@ public:
         return fragmentStage;
     }
 
+    void setPrimitiveTopology(VkPrimitiveTopology t)
+    {
+        createInfo.topology = t;
+    }
     /**
      * @brief setOutputFormat
      * @param index

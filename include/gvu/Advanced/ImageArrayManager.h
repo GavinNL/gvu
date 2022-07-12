@@ -302,6 +302,11 @@ struct ImageArrayManager
         m_nullCubeImage = {};
 
     }
+
+    std::vector<std::pair<gvu::TextureHandle, VkFilter>> & getImages()
+    {
+        return images;
+    }
 protected:
     gvu::TextureHandle m_nullImage;
     gvu::TextureHandle m_nullCubeImage;
