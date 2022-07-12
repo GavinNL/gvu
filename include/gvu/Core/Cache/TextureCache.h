@@ -548,7 +548,7 @@ inline void ImageInfo::setData(void const * data, VkDeviceSize bytes)
 }
 
 
-VkSampler ImageInfo::getOrCreateSampler(VkSamplerCreateInfo c)
+inline VkSampler ImageInfo::getOrCreateSampler(VkSamplerCreateInfo c)
 {
     return sharedData->samplerCache.create(c);
 }
