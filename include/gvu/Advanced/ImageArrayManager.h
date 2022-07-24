@@ -24,15 +24,18 @@ namespace gvu
  */
 struct ImageArrayManager
 {
-    static constexpr uint32_t                      maxImages     = 1024;
-    static constexpr uint32_t                      maxImageCubes = 1024;
+    uint32_t                      maxImages     = 1024;
+    uint32_t                      maxImageCubes = 1024;
     std::shared_ptr<gvu::VulkanApplicationContext> m_context = std::make_shared<gvu::VulkanApplicationContext>();
 
-    void init(std::shared_ptr<gvu::VulkanApplicationContext> c )
+
+    void init(std::shared_ptr<gvu::VulkanApplicationContext> c, VkShaderStageFlags _stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT, uint32_t _maxImages=1024, uint32_t _maxImageCubes=1024)
     {
         m_context = c;
 
-        VkShaderStageFlags stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT ;
+        VkShaderStageFlags stageFlags = _stageFlags;
+        maxImages     = _maxImages;
+        maxImageCubes = _maxImageCubes;
 
         gvu::DescriptorSetLayoutCreateInfo ci;
         ci.bindings.push_back(VkDescriptorSetLayoutBinding{0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, maxImages    , stageFlags, nullptr});
