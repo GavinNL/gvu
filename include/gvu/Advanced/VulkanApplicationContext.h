@@ -178,9 +178,10 @@ inline void GraphicsPipeline::build()
     //createInfo.enableDepthWrite = true;
     createInfo.dynamicStates.push_back(VK_DYNAMIC_STATE_VIEWPORT);
     createInfo.dynamicStates.push_back(VK_DYNAMIC_STATE_SCISSOR);
-    createInfo.dynamicStates.push_back(VK_DYNAMIC_STATE_CULL_MODE);
-    createInfo.dynamicStates.push_back(VK_DYNAMIC_STATE_FRONT_FACE);
-    createInfo.dynamicStates.push_back(VK_DYNAMIC_STATE_PRIMITIVE_TOPOLOGY);
+
+    //createInfo.dynamicStates.push_back(VK_DYNAMIC_STATE_CULL_MODE);
+    //createInfo.dynamicStates.push_back(VK_DYNAMIC_STATE_FRONT_FACE);
+    //createInfo.dynamicStates.push_back(VK_DYNAMIC_STATE_PRIMITIVE_TOPOLOGY);
 
     //createInfo.setVertexInputs({
     //                       VK_FORMAT_R32G32B32_SFLOAT, // position
