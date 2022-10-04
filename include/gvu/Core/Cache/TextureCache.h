@@ -30,6 +30,7 @@ struct SharedData
     gvu::CommandPoolManager    commandPool;
     VmaAllocator               allocator = nullptr;
     std::vector<TextureHandle> images;
+    std::unordered_set<BufferHandle> buffers;
     DescriptorSetLayoutCache   layoutCache;
     DescriptorPoolManager      descriptorPool;
 
@@ -54,11 +55,24 @@ public:
 
     using texture_handle_type = TextureHandle;
 
+    struct MemoryCacheCreateInfo
+    {
+        VkPhysicalDevice physicalDevice;
+        VkDevice         device;
+        VkQueue          graphicsQueue;
+        VmaAllocator     allocator = nullptr;
+        VkDeviceSize     defaultStagingBufferSize = (1024*1024*4)*4;
+    };
 
+    void init(MemoryCacheCreateInfo const & c)
+    {
+        init(c.physicalDevice,c.device,c.graphicsQueue,c.allocator, c.defaultStagingBufferSize);
+    }
     void init(VkPhysicalDevice physicalDevice,
               VkDevice         device,
               VkQueue          graphicsQueue,
-              VmaAllocator     allocator)
+              VmaAllocator     allocator,
+              VkDeviceSize     defaultStagingBufferSize)
     {
         auto data = std::make_shared<SharedData>();
 
@@ -67,12 +81,15 @@ public:
         m_sharedData->allocator = allocator;
         m_sharedData->layoutCache.init(device);
 
+
         DescriptorSetLayoutCreateInfo dslci;
         dslci.bindings.push_back( VkDescriptorSetLayoutBinding{0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,1,VK_SHADER_STAGE_FRAGMENT_BIT, nullptr});
         auto layout = m_sharedData->layoutCache.create(dslci);
         m_sharedData->descriptorPool.init(device, &m_sharedData->layoutCache, layout, 1024);
 
-        m_sharedData->_stagingBuffer = allocateBuffer(1024*1024*4, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        m_sharedData->_stagingBuffer = allocateBuffer(defaultStagingBufferSize,
+                                                      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                                      VMA_MEMORY_USAGE_CPU_TO_GPU);
     }
 
     /**
@@ -156,6 +173,7 @@ public:
         allocCInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT; // can always set this bit,
                                                              // vma will not allow device local
                                                              // memory to be mapped
+        allocCInfo.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
 
         VkBuffer &         buffer     = b->buffer;
         VmaAllocation &    allocation = b->allocation;
@@ -168,6 +186,9 @@ public:
            throw std::runtime_error( "Error allocating VMA Buffer");
         }
         b->sharedData = m_sharedData;
+
+        b->sharedData->buffers.insert(b);
+
         return b;
     }
 
@@ -473,10 +494,29 @@ protected:
     std::shared_ptr<SharedData>                      m_sharedData;
 };
 
-void BufferInfo::setData(void *data, VkDeviceSize byteSize, VkDeviceSize offset)
+void BufferInfo::beginUpdate(void const * data, VkDeviceSize size, VkDeviceSize offset)
 {
-    auto allocator = sharedData->allocator;
+    auto fence = sharedData->commandPool.beginRecording([dstBuffer=this->getBuffer(),size,offset,data](auto cmd)
+    {
+        char const * pData = static_cast<char const*>(data);
+        VkDeviceSize c=0;
+        VkDeviceSize off=0;
+        size_t count=0;
+        while(c < size)
+        {
+            auto writeSize = std::min<VkDeviceSize>(size-c, 65536);
+            vkCmdUpdateBuffer(cmd, dstBuffer, offset+off, writeSize, pData);
+            pData  += writeSize;
+            c      += writeSize;
+            off += writeSize;
+            ++count;
+        }
+    }, true);
+    fence->wait();
+}
 
+void BufferInfo::setData(void const *data, VkDeviceSize byteSize, VkDeviceSize offset)
+{
     if(sharedData->_stagingBuffer)
     {
         if( sharedData->_stagingBuffer->getBufferSize() < byteSize)
@@ -493,7 +533,7 @@ void BufferInfo::setData(void *data, VkDeviceSize byteSize, VkDeviceSize offset)
 
     {
         auto fence = sharedData->commandPool.beginRecording([srcBuffer=sharedData->_stagingBuffer->getBuffer(),
-                                                             dstBuffer=this->getBuffer(),byteSize,offset,this](auto cmd)
+                                                             dstBuffer=this->getBuffer(),byteSize,offset](auto cmd)
         {
             VkBufferCopy region;
             region.dstOffset = offset;
@@ -530,8 +570,6 @@ inline void BufferInfo::resize(VkDeviceSize bytes)
 
 void ImageInfo::setData(void * data)
 {
-    auto allocator = sharedData->allocator;
-
     auto byteSize = getExtents().width * getExtents().height * getFormatInfo(info.format).blockSizeInBits/8;
 
     if(sharedData->_stagingBuffer)
@@ -597,12 +635,10 @@ void ImageInfo::setData(void * data)
 }
 
 
-void ImageInfo::copyData(void * data, uint32_t width, uint32_t height,
+void ImageInfo::copyData(const void *data, uint32_t width, uint32_t height,
                          uint32_t arrayLayer, uint32_t mipLevel,
                          uint32_t x_ImageOffset, uint32_t y_ImageOffset)
 {
-    auto allocator = sharedData->allocator;
-
     auto byteSize = width * height * getFormatInfo(info.format).blockSizeInBits/8;
 
     if(sharedData->_stagingBuffer)

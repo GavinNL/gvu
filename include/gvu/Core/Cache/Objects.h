@@ -92,7 +92,7 @@ struct ImageInfo
      * the image data will be copied
      * and the image layer/level will be transitioned to SHADER_READ_ONLY_OPTIMAL
      */
-    void copyData(void * data, uint32_t width, uint32_t height,
+    void copyData(void const * data, uint32_t width, uint32_t height,
                   uint32_t arrayLevel = 0, uint32_t mipLevel = 0,
                   uint32_t x_ImageOffset=0, uint32_t y_ImageOffset=0);
 
@@ -600,7 +600,21 @@ struct BufferInfo
      *
      * Copies the data from the host to the buffer
      */
-    void setData(void *data, VkDeviceSize byteSize, VkDeviceSize offset);
+    void setData(void const *data, VkDeviceSize byteSize, VkDeviceSize offset);
+
+    /**
+     * @brief beginUpdate
+     * @param data
+     * @param size
+     * @param offset
+     *
+     * Updates the buffer data using VkCmdUpdateBuffer. This is just here for
+     * testing and probably not recommended to use.
+     *
+     * VkCmdUpdateBuffer can only write 2^16 bytes at a time.
+     *
+     */
+    void beginUpdate(void const * data, VkDeviceSize size, VkDeviceSize offset);
 
     VkBuffer getBuffer() const
     {
