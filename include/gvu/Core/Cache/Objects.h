@@ -657,9 +657,12 @@ struct BufferInfo
             vmaUnmapMemory(allocator, allocation);
             mapped = nullptr;
         }
-        vmaDestroyBuffer(allocator, buffer, allocation);
-        buffer = VK_NULL_HANDLE;
-        allocation = nullptr;
+        if(buffer != VK_NULL_HANDLE)
+        {
+            vmaDestroyBuffer(allocator, buffer, allocation);
+            buffer = VK_NULL_HANDLE;
+            allocation = nullptr;
+        }
     }
 
     /**

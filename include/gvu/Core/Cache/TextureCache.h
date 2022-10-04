@@ -97,6 +97,11 @@ public:
      *
      * Destroys the texture cache and frees all memory
      * that was created.
+     *
+     * It is still recommended to reset all allocated
+     * memory before calling destroy. If there are still
+     * shared_ptrs begin referenced, it will print out
+     * an error
      */
     void destroy()
     {
@@ -112,10 +117,17 @@ public:
             m_images.pop_back();
         }
 
-        if(m_sharedData->_stagingBuffer)
+        m_sharedData->_stagingBuffer.reset();
+
+        for(auto & x : m_sharedData->buffers)
         {
-            m_sharedData->_stagingBuffer->destroy();
+            if(x.use_count() > 1)
+            {
+                std::cerr << "WARNING: Buffer " << x.get() << " is still being referenced! Use Count: " << x.use_count() << std::endl;
+            }
+            x->destroy();
         }
+        m_sharedData->buffers.clear();
 
         m_sharedData->descriptorPool.destroy();
         m_sharedData->layoutCache.destroy();

@@ -53,7 +53,7 @@ SCENARIO( " Create a graphics pipeline using a renderpass" )
 
     std::cout << "Time to update: " << std::chrono::duration<double>(t1-t0).count() << std::endl;
     //--------------------------------------------------------------
-    buffer->destroy();
+  //  buffer->destroy();
 
     M.destroy();
 
