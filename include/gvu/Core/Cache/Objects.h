@@ -650,20 +650,7 @@ struct BufferInfo
     {
         vmaFlushAllocation(allocator, allocation, 0, VK_WHOLE_SIZE);
     }
-    void destroy()
-    {
-        if(mapped)
-        {
-            vmaUnmapMemory(allocator, allocation);
-            mapped = nullptr;
-        }
-        if(buffer != VK_NULL_HANDLE)
-        {
-            vmaDestroyBuffer(allocator, buffer, allocation);
-            buffer = VK_NULL_HANDLE;
-            allocation = nullptr;
-        }
-    }
+
 
     /**
      * @brief resize
@@ -683,12 +670,12 @@ struct BufferInfo
         m_itr = 0;
     }
 protected:
-    VkBuffer                                  buffer         = VK_NULL_HANDLE;
-    VmaAllocation                             allocation     = nullptr;
-    VmaAllocationInfo                         allocationInfo = {};
-    VmaAllocator                              allocator;
+    VkBuffer                                  buffer               = VK_NULL_HANDLE;
+    VmaAllocation                             allocation           = nullptr;
+    VmaAllocationInfo                         allocationInfo       = {};
+    VmaAllocator                              allocator            = nullptr;
     VmaAllocationCreateInfo                   allocationCreateInfo = {};
-    VkBufferCreateInfo                        bufferInfo           = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+    VkBufferCreateInfo                        bufferInfo           = {};
     void *                                    mapped               = nullptr;
     std::shared_ptr<SharedData>               sharedData;
     friend class MemoryCache;
@@ -724,6 +711,20 @@ protected:
         return r / sizeofValue;
     }
 
+    void _destroy()
+    {
+        if(mapped)
+        {
+            vmaUnmapMemory(allocator, allocation);
+            mapped = nullptr;
+        }
+        if(buffer != VK_NULL_HANDLE)
+        {
+            vmaDestroyBuffer(allocator, buffer, allocation);
+            buffer = VK_NULL_HANDLE;
+            allocation = nullptr;
+        }
+    }
 };
 
 using BufferHandle   = std::shared_ptr<BufferInfo>;

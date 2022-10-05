@@ -30,7 +30,7 @@ struct SharedData
     gvu::CommandPoolManager    commandPool;
     VmaAllocator               allocator = nullptr;
     std::vector<TextureHandle> images;
-    std::unordered_set<BufferHandle> buffers;
+    std::vector<BufferHandle>  buffers;
     DescriptorSetLayoutCache   layoutCache;
     DescriptorPoolManager      descriptorPool;
 
@@ -121,17 +121,53 @@ public:
 
         for(auto & x : m_sharedData->buffers)
         {
-            if(x.use_count() > 1)
+            auto useCount = x.use_count();
+            if(useCount > 1)
             {
-                std::cerr << "WARNING: Buffer " << x.get() << " is still being referenced! Use Count: " << x.use_count() << std::endl;
+                std::cerr << "WARNING: Buffer " << x.get() << " is still being referenced! Use Count: " << useCount << std::endl;
             }
-            x->destroy();
+            destroyBuffer(*x);
         }
         m_sharedData->buffers.clear();
 
         m_sharedData->descriptorPool.destroy();
         m_sharedData->layoutCache.destroy();
         m_sharedData->commandPool.destroy();
+    }
+
+    /**
+     * @brief freeUnreferencedObjects
+     *
+     * destroys any buffers/images that are no longer being referenced
+     */
+    void freeUnreferencedBuffers()
+    {
+        auto & objlist = m_sharedData->buffers;
+        auto rm = std::remove_if(objlist.begin(), objlist.end(), [](auto && i)
+        {
+            return i.use_count() == 1;
+        });
+        for(auto i = rm; i!=objlist.end();i++)
+        {
+            destroyBuffer(*(*i));
+        }
+        std::cerr << std::distance(rm, objlist.end()) << " buffers destroyed" << std::endl;
+        objlist.erase(rm, objlist.end());
+    }
+
+    void freeUnreferencedImages()
+    {
+        auto & objlist = m_sharedData->images;
+        auto rm = std::remove_if(objlist.begin(), objlist.end(), [](auto && i)
+        {
+            return i.use_count() == 1;
+        });
+        for(auto i = rm; i!=objlist.end();i++)
+        {
+            destroyTexture(*(*i));
+        }
+        std::cerr << std::distance(rm, objlist.end()) << " textures destroyed" << std::endl;
+        objlist.erase(rm, objlist.end());
     }
 
     /**
@@ -168,14 +204,27 @@ public:
      * @param memUsage
      * @return
      *
-     * Allocate a buffer
+     * Allocate a buffer and return the buffer handle.
      */
     BufferHandle allocateBuffer(size_t bytes, VkBufferUsageFlags usage, VmaMemoryUsage memUsage)
     {
+        for(auto & b : m_sharedData->buffers)
+        {
+            if(b.use_count() == 1)
+            {
+                if(b->getBufferSize() == bytes
+                        && b->bufferInfo.usage == usage
+                        && b->allocationCreateInfo.usage == memUsage)
+                {
+                    return b;
+                }
+            }
+        }
         auto b = std::make_shared<BufferInfo>();
         b->allocator = getAllocator();
 
         VkBufferCreateInfo & bufferInfo = b->bufferInfo;
+        bufferInfo.pNext = nullptr;
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         bufferInfo.size  = bytes;
         bufferInfo.usage = usage;
@@ -199,7 +248,7 @@ public:
         }
         b->sharedData = m_sharedData;
 
-        b->sharedData->buffers.insert(b);
+        b->sharedData->buffers.push_back(b);
 
         return b;
     }
@@ -273,7 +322,8 @@ public:
                 imageInfo.imageView = id->getImageView();
                 imageInfo.sampler   = id->getLinearSampler();
 
-                VkWriteDescriptorSet wr = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+                VkWriteDescriptorSet wr = {};
+                wr.sType                = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                 wr.descriptorCount      = 1;
                 wr.descriptorType       = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
                 wr.dstSet               = id->singleDescriptorSet;
@@ -283,6 +333,7 @@ public:
             }
 
             id->sharedData = m_sharedData;
+
             return id;
         }
 
@@ -316,6 +367,20 @@ public:
     }
 
 protected:
+
+    void destroyBuffer(BufferInfo & I)
+    {
+        if(I.mapped)
+        {
+            vmaUnmapMemory(I.allocator, I.allocation);
+            I.mapped = nullptr;
+        }
+        if(I.buffer != VK_NULL_HANDLE)
+        {
+            vmaDestroyBuffer(m_sharedData->allocator,I.buffer,I.allocation);
+            I = {};
+        }
+    }
 
     void destroyTexture(ImageInfo & I)
     {
@@ -559,7 +624,7 @@ void BufferInfo::setData(void const *data, VkDeviceSize byteSize, VkDeviceSize o
 
 inline void BufferInfo::resize(VkDeviceSize bytes)
 {
-    destroy();
+    _destroy();
 
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bufferInfo.size  = bytes;
