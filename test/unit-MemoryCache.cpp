@@ -37,25 +37,36 @@ SCENARIO( " Create a graphics pipeline using a renderpass" )
 
 
 
+    // 1. Allocate a buffer
     size_t siz = 1024*1024*100;
     auto buffer = M.allocateBuffer(siz,
                                    VK_BUFFER_USAGE_TRANSFER_DST_BIT|VK_BUFFER_USAGE_VERTEX_BUFFER_BIT|VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
                                    VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE);
-    // Test creating a different object
     //--------------------------------------------------------------
 
+    // 2. Perform the unrecommended vkCmdUpdateBuffer method of writing data to t
+    //    the buffer
+    {
+        std::vector<uint8_t> raw(siz);
 
-    std::vector<uint8_t> raw(siz);
+        auto t0 = std::chrono::system_clock::now();
+        buffer->beginUpdate(raw.data(), raw.size(), 0);
+        auto t1 = std::chrono::system_clock::now();
 
-    auto t0 = std::chrono::system_clock::now();
-    buffer->beginUpdate(raw.data(), raw.size(), 0);
-    auto t1 = std::chrono::system_clock::now();
-
-    std::cout << "Time to update: " << std::chrono::duration<double>(t1-t0).count() << std::endl;
+        std::cout << "Time to update: " << std::chrono::duration<double>(t1-t0).count() << std::endl;
+    }
     //--------------------------------------------------------------
 
+    auto oldBuffer = buffer->getBuffer();
+
+    // 3. reset the buffer so that it can be used again
     buffer.reset();
 
+    auto buffer2 = M.allocateBuffer(siz,
+                                   VK_BUFFER_USAGE_TRANSFER_DST_BIT|VK_BUFFER_USAGE_VERTEX_BUFFER_BIT|VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                                   VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE);
+
+    REQUIRE( buffer2->getBuffer() == oldBuffer);
 
     M.freeUnreferencedImages();
     M.freeUnreferencedBuffers();

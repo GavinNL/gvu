@@ -22,8 +22,8 @@ SCENARIO("Aligned allocations")
         }
         THEN("The allocated size is 32")
         {
-            REQUIRE( b->allocationSize() == 32);
-            REQUIRE( b->allocationOffset()   == 0);
+            REQUIRE( b->allocationSize()   == 256);
+            REQUIRE( b->allocationOffset() == 0);
         }
 
         WHEN("We allocate a buffer with 24 byte alignment")
@@ -33,14 +33,14 @@ SCENARIO("Aligned allocations")
             THEN("The offset and size is a multiple of the alignment")
             {
                 REQUIRE( c->offset() % 24 == 0);
-                REQUIRE( c->size() % 24 == 0);
+                REQUIRE( c->size()   % 24 == 0);
                 REQUIRE( c->size() >= 468 );
                 REQUIRE( c->alignment() == 24);
             }
             THEN("The allocated size is greater than the size")
             {
                 REQUIRE( c->allocationSize() > c->size() );
-                REQUIRE( c->allocationOffset() == 32);
+                REQUIRE( c->allocationOffset() == 256);
             }
         }
     }
@@ -157,6 +157,53 @@ SCENARIO("Allocting multiple")
     std::cout << "Total Allocations: " << allocs.size() << std::endl;
 }
 
+SCENARIO("Allocting typed buffers")
+{
+    // allocate 200Mb of mesh data
+    gvu::SubBufferManager M = gvu::SubBufferManager::createTestCase(512*1024, 0,
+                                                                    512*1024,0,1);
+
+
+    auto b = M.allocateTyped<float>(300);
+    {
+        REQUIRE(b->size() >= 300 * sizeof(float));
+        REQUIRE(b->offset() % sizeof(float) == 0);
+        REQUIRE(b->allocationSize() % 256 == 0);
+        REQUIRE(b->allocationOffset() % 256 == 0);
+    }
+
+    auto c = M.allocateTyped< std::array<float, 3> >(500);
+    {
+        REQUIRE(c->size() >= 500 * sizeof(float));
+        REQUIRE(c->offset() % sizeof(float) == 0);
+        REQUIRE(c->alignment() == sizeof( std::array<float,3>));
+        REQUIRE(c->allocationSize() % 256 == 0);
+        REQUIRE(c->allocationOffset() % 256 == 0);
+    }
+
+
+    auto d = M.allocateTyped< std::array<float, 3> >(500);
+    c.reset();
+    {
+        REQUIRE(d->size() >= 500 * sizeof(float));
+        REQUIRE(d->offset() % sizeof(float) == 0);
+        REQUIRE(d->alignment() == sizeof( std::array<float,3>));
+        REQUIRE(d->allocationSize() % 256 == 0);
+        REQUIRE(d->allocationOffset() % 256 == 0);
+    }
+    // bind the vertex buffers like so:
+    // VkBuffer     buffers[] = { b->buffer(), c->buffer()};
+    // VkDeviceSize offsets[] = { b->offset()   , c->offset()};
+    // vkCmdBindVertexBuffers({}, 0, 2, buffers, offsets);
+
+    // we want to be able to do something like this:
+
+
+
+    M.print();
+}
+
+
 #if 0
 SCENARIO( " Scenario 1: Create a Sampler" )
 {
@@ -196,7 +243,7 @@ SCENARIO( " Scenario 1: Create a Sampler" )
     //--------------------------------------------------------------
 
     // Destroy the cache
-    cache.destroy();
+    cache.destroy(); B->m_alloca
 
     window->destroy();
     window.reset();

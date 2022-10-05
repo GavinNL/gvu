@@ -60,6 +60,10 @@ namespace gvu
  */
 struct SubBuffer
 {
+    VkBuffer buffer() const
+    {
+        return m_handle->getBuffer();
+    }
     /**
      * @brief offset
      * @return
@@ -70,11 +74,13 @@ struct SubBuffer
     {
         return m_offset;
     }
+
     /**
      * @brief size
      * @return
      *
-     * The size of the usable buffer
+     * The size of the usable buffer requested by the
+     * user
      */
     VkDeviceSize size() const
     {
@@ -102,11 +108,24 @@ struct SubBuffer
         return m_allocationOffset;
     }
 
+    /**
+     * @brief alignment
+     * @return
+     *
+     * The alignment of the buffer.
+     *
+     * offset() % alignment() == 0
+     */
     VkDeviceSize alignment() const
     {
         return m_alignment;
     }
 
+    /**
+     * @brief shaderStorageArrayStartIndex
+     * @return
+     *
+     */
     uint32_t shaderStorageArrayStartIndex() const
     {
         return offset() / alignment();
@@ -130,15 +149,29 @@ using SubBufferHandle   = std::shared_ptr<SubBuffer>;
 /**
  * @brief The SubBufferManager class
  *
- * The SubBufferManager is essentially a single Buffer
- * Sections of the buffer can be allocated and tracked
+ * The SubBufferManager is essentially a memory pool for buffers
+ * that exist within another buffer. This works by allocating
+ * a single buffer (ie: 100M) and then allocating sections
+ * of that to use for various purposes.
  */
 class SubBufferManager
 {
 public:
-    void setBuffer(BufferHandle h)
+    /**
+     * @brief setBuffer
+     * @param h
+     * @param allocationChunkSize
+     *
+     * Sets the buffer for this manager. This will essentially reset
+     * all allocations.
+     *
+     * The allocationChunkSize will ensure that all allocations are
+     * multiples of that value
+     */
+    void setBuffer(BufferHandle h, VkDeviceSize allocationChunkSize=256)
     {
         m_buffer = h;
+        m_allocationChunkSize = allocationChunkSize;
         auto m_emptyMemory = std::make_shared<SubBuffer>();
         m_emptyMemory->m_allocationOffset = 0;
         m_emptyMemory->m_allocationSize   = h->getBufferSize();
@@ -172,35 +205,35 @@ public:
     SubBufferHandle allocate(VkDeviceSize s, VkDeviceSize alignment )
     {
         // bump the size requirements to be multiples of the alignment
-        s = s % alignment == 0 ? s : (s/alignment+1)*alignment;
+        s = BufferInfo::_roundUp(s, alignment);
+        //s = s % alignment == 0 ? s : (s/alignment+1)*alignment;
 
-        //for(auto & E : m_allocations)
-        for(auto it=m_allocations.begin(); it!=m_allocations.end();)
+        for(auto it=std::prev(m_allocations.end()); ;)
         {
             auto & E = *it;
             // use_count() == 1 means this chunk was allocate
             // but no longer used
             if(E.use_count() == 1)
             {
-                VkDeviceSize alignedOffset = E->allocationOffset() % alignment == 0
-                                                    ? E->allocationOffset()
-                                                    : (1 + E->allocationOffset() / alignment) * alignment;
+                auto firstByte    = E->allocationOffset();
+                auto alignedBegin = BufferInfo::_roundUp(firstByte, alignment);
+                auto alignedEnd   = alignedBegin + s;
+                auto lastByte     = BufferInfo::_roundUp(alignedEnd,256);
 
-                auto alignmentBytes = alignedOffset - E->allocationOffset();
-                s += alignmentBytes;
+                auto allocationSize = lastByte-firstByte;
 
-                if(E->allocationSize() >= s)
+                if(E->allocationSize() >= allocationSize)
                 {
                     auto B = std::make_shared<SubBuffer>(*E);
 
-                    B->m_allocationSize   = s;
+                    B->m_allocationSize   = allocationSize;
                     B->m_allocationOffset = E->allocationOffset();
-                    B->m_size             = s - alignmentBytes;
-                    B->m_offset           = alignedOffset;
+                    B->m_size             = s;
+                    B->m_offset           = alignedBegin;
                     B->m_alignment        = alignment;
 
                     E->m_allocationOffset = B->m_allocationOffset + B->m_allocationSize;
-                    E->m_allocationSize   -= s;
+                    E->m_allocationSize   -= allocationSize;
                     E->m_offset           = E->m_allocationOffset;
                     E->m_size             = E->m_allocationSize;
                     E->m_alignment        = 1;
@@ -210,12 +243,29 @@ public:
                     return B;
                 }
             }
-
-            ++it;
+            if( it == m_allocations.begin())
+                break;
+            --it;
         }
 
 
         return {};
+    }
+
+
+    /**
+     *
+     * Allocate a buffer using a specifc type. This is
+     * mostly just a helper function to use if you know you
+     * are going to use the buffer to only hold a certain types (eg: vec3 for positions)
+     *
+     */
+    template<typename T>
+    SubBufferHandle allocateTyped(uint32_t count)
+    {
+        auto d = allocate( sizeof(T) * count, sizeof(T));
+        assert(d->offset() % sizeof(T) == 0);
+        return d;
     }
 
     std::list<SubBufferHandle> const & allocations() const
@@ -257,6 +307,7 @@ public:
         std::string _emp = "_.-";
         std::string out;
         size_t i=0;
+
         for(auto & a : m_allocations)
         {
             auto s = a->allocationSize() / chunkSize;
@@ -282,9 +333,9 @@ public:
         M.m_allocations.push_back(a);
         return M;
     }
-
+protected:
     std::list<SubBufferHandle> m_allocations;
-
+    VkDeviceSize m_allocationChunkSize;
     BufferHandle m_buffer;
 };
 

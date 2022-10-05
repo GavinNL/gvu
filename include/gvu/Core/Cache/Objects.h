@@ -203,7 +203,7 @@ struct ImageInfo
      * @param arrayLayer
      *
      * Generates mipmaps for a particular array layer. This works
-     * by copying the mipmap from the previous later using a linear filter
+     * by copying the mipmap from the previous layer using a linear filter
      *
      * Requirement: Mip 0 must be in SHADER_READ_ONLY_OPTIMAL
      */
@@ -646,6 +646,7 @@ struct BufferInfo
         vmaMapMemory(allocator, allocation, &mapped);
         return mapData();
     }
+
     void flush()
     {
         vmaFlushAllocation(allocator, allocation, 0, VK_WHOLE_SIZE);
@@ -669,6 +670,12 @@ struct BufferInfo
     {
         m_itr = 0;
     }
+
+    static auto _roundUp(size_t numToRound, size_t multiple) -> size_t
+    {
+        //assert(multiple);
+        return ((numToRound + multiple - 1) / multiple) * multiple;
+    };
 protected:
     VkBuffer                                  buffer               = VK_NULL_HANDLE;
     VmaAllocation                             allocation           = nullptr;
@@ -681,11 +688,7 @@ protected:
     friend class MemoryCache;
 
     VkDeviceSize     m_itr    = 0;
-    static auto _roundUp(size_t numToRound, size_t multiple) -> size_t
-    {
-        //assert(multiple);
-        return ((numToRound + multiple - 1) / multiple) * multiple;
-    };
+
 
     size_t push_back(void const * value, size_t count, uint32_t sizeofValue)
     {
