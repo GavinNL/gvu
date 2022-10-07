@@ -23,6 +23,7 @@ namespace gvu
 class DescriptorPoolManager
 {
 public:
+    #pragma message "We should rename this to SingleLayoutDescriptorSetAllocator"
 
     /**
      * @brief init
@@ -89,6 +90,7 @@ public:
         ++i.returnedSets;
         if( i.returnedSets == m_createInfo.maxSets )
         {
+            #pragma message "Rather than reset the pool. Set a flag saying that a pool needs to be reset. On next allocation, reset the pool"
             resetPool(p);
         }
     }

@@ -371,6 +371,8 @@ protected:
 
         throw std::runtime_error("Could not find a matching queue family index");
     }
+
+
     VkCommandPool    m_pool           = VK_NULL_HANDLE;
     VkDevice         m_device         = VK_NULL_HANDLE;
     VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
