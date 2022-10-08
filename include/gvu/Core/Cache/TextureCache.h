@@ -594,6 +594,7 @@ void BufferInfo::beginUpdate(void const * data, VkDeviceSize size, VkDeviceSize 
 
 void BufferInfo::setData(void const *data, VkDeviceSize byteSize, VkDeviceSize offset)
 {
+    #pragma message "We should do a bounds check here to make sure we do not copy more than we need"
     if(sharedData->_stagingBuffer)
     {
         if( sharedData->_stagingBuffer->getBufferSize() < byteSize)
