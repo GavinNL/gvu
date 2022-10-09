@@ -92,51 +92,6 @@ SCENARIO("Multiple allocations")
     }
 }
 
-SCENARIO("Condense allocations")
-{
-    gvu::SubBufferManager M = gvu::SubBufferManager::createTestCase(1024, 0, 1024,0,1);
-
-
-    WHEN("Multiple buffers")
-    {
-        auto a = M.allocate(256, 16);
-        auto b = M.allocate(256, 16);
-        auto c = M.allocate(256, 16);
-        auto d = M.allocate(256, 16);
-
-
-        // |  a  |  b  |  c  |  d  |
-
-        THEN("We can check the offsets")
-        {
-            REQUIRE( a->offset() == 0);
-            REQUIRE( b->offset() == 256);
-            REQUIRE( c->offset() == 512);
-            REQUIRE( d->offset() == 768);
-
-            M.print();
-            WHEN("We reset all of them and condense them")
-            {
-                a.reset();
-                b.reset();
-                c.reset();
-                d.reset();
-
-
-                M.print();
-                M.condense();
-
-                THEN("There will only be one allocation")
-                {
-                    REQUIRE(M.allocations().size() == 1);
-                }
-                M.print();
-            }
-        }
-    }
-}
-
-
 SCENARIO("Allocting multiple")
 {
     // allocate 200Mb of mesh data
@@ -203,6 +158,52 @@ SCENARIO("Allocting typed buffers")
     M.print();
 }
 
+
+SCENARIO("Test merge allocation")
+{
+    GIVEN("A manager with 5 allocations that span the entire buffer")
+    {
+        // allocate 200Mb of mesh data
+        gvu::SubBufferManager M = gvu::SubBufferManager::createTestCase(5*1024, 0,
+                                                                        5*1024,0,1);
+
+
+        auto a = M.allocate(1024, 4);
+        auto b = M.allocate(1024, 4);
+        auto c = M.allocate(1024, 4);
+        auto d = M.allocate(1024, 4);
+        auto e = M.allocate(1024, 4);
+        M.print();
+
+        REQUIRE(M.allocations().size() == 5);
+
+        WHEN("We reset the 3 middle allocations")
+        {
+            d.reset();
+            c.reset();
+            b.reset();
+            M.print();
+
+            THEN("When we allocate 1024*2")
+            {
+                auto f = M.allocate(2048, 4);
+
+                REQUIRE(M.allocations().size() == 4);
+                REQUIRE( f->allocationOffset() == 1024*2);
+                M.print();
+
+            }
+            THEN("When we allocate 1024*3")
+            {
+                auto g = M.allocate(1024*3, 4);
+                REQUIRE(M.allocations().size() == 3);
+                REQUIRE( g->allocationOffset() == 1024);
+                M.print();
+            }
+
+        }
+    }
+}
 
 #if 0
 SCENARIO( " Scenario 1: Create a Sampler" )

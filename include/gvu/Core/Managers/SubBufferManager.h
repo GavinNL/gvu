@@ -205,9 +205,10 @@ public:
     SubBufferHandle allocate(VkDeviceSize s, VkDeviceSize alignment )
     {
         // bump the size requirements to be multiples of the alignment
-        s = BufferInfo::_roundUp(s, alignment);
+        //s = BufferInfo::_roundUp(s, alignment);
         //s = s % alignment == 0 ? s : (s/alignment+1)*alignment;
 
+        assert(m_allocations.size() > 0);
         for(auto it=std::prev(m_allocations.end()); ;)
         {
             auto & E = *it;
@@ -215,12 +216,17 @@ public:
             // but no longer used
             if(E.use_count() == 1)
             {
+                // check if any of the next allocations are
+                // able to be merged into this empty allocation
+                _mergeForward(it);
+
                 auto firstByte    = E->allocationOffset();
                 auto alignedBegin = BufferInfo::_roundUp(firstByte, alignment);
-                auto alignedEnd   = alignedBegin + s;
-                auto lastByte     = BufferInfo::_roundUp(alignedEnd,256);
+                auto alignedEnd   = BufferInfo::_roundUp(alignedBegin + s, alignment);
+                auto lastByte     = BufferInfo::_roundUp(alignedEnd,m_allocationChunkSize);
 
                 auto allocationSize = lastByte-firstByte;
+                s = alignedEnd - alignedBegin;
 
                 if(E->allocationSize() >= allocationSize)
                 {
@@ -238,8 +244,15 @@ public:
                     E->m_size             = E->m_allocationSize;
                     E->m_alignment        = 1;
 
+                    // insert the newly allocated buffer
+                    // into the allocation list right before E
                     m_allocations.insert(it, B);
 
+                    // no need to keep E around if the allocation size is zero
+                    if(E->allocationSize() == 0)
+                    {
+                        m_allocations.erase(it);
+                    }
                     return B;
                 }
             }
@@ -272,30 +285,6 @@ public:
     {
         return m_allocations;
     }
-    /**
-     * @brief condense
-     *
-     * If two allocations besides each other are both unused, condenses them
-     * into a single chunk
-     */
-    void condense()
-    {
-        auto newEnd = std::unique(m_allocations.begin(), m_allocations.end(), [](auto & a, auto & b)
-        {
-            if(a.use_count() == 1 && b.use_count()==1)
-            {
-                if(a->allocationOffset()+a->allocationSize() == b->allocationOffset() )
-                {
-                    a->m_allocationSize += b->allocationSize();
-                    a->m_size = a->m_allocationSize;
-                    return true;
-                }
-            }
-            return false;
-        });
-
-        m_allocations.erase(newEnd, m_allocations.end());
-    }
 
     void print(VkDeviceSize chunkSize = 256)
     {
@@ -304,14 +293,14 @@ public:
             return a->allocationOffset() < b->allocationOffset();
         }));
         std::string _sym = "#X@";
-        std::string _emp = "_.-";
+        std::string _emp = "_.";
         std::string out;
         size_t i=0;
 
         for(auto & a : m_allocations)
         {
             auto s = a->allocationSize() / chunkSize;
-            out += std::string(s, a.use_count() == 1 ? _emp[i%_sym.size()] : _sym[i%_sym.size()] );
+            out += std::string(s, a.use_count() == 1 ? _emp[i%_emp.size()] : _sym[i%_sym.size()] );
             ++i;
         }
         std::cout << out << std::endl;
@@ -334,8 +323,40 @@ public:
         return M;
     }
 protected:
+    // given an iterator to a subbuffer handle
+    // attempt to merge with next allocation if
+    // the next handle is empty
+    bool _mergeForward(std::list<SubBufferHandle>::iterator a)
+    {
+        if( a == m_allocations.end())
+            return false;
+        auto b = std::next(a);
+        if( b == m_allocations.end())
+            return false;
+        auto & A = *a;
+        auto & B = *b;
+
+        // if both of the allocations are empty
+        // then we can merge them
+        if(B.use_count() == 1)
+        {
+            assert(A->allocationOffset() + A->allocationSize() == B->allocationOffset() );
+
+            if(A->allocationOffset() + A->allocationSize() == B->allocationOffset() )
+            {
+                A->m_allocationSize += B->allocationSize();
+                A->m_size            = A->m_allocationSize;
+
+                m_allocations.erase(b);
+                return _mergeForward(a);
+            }
+        }
+        return false;
+    }
+
+
     std::list<SubBufferHandle> m_allocations;
-    VkDeviceSize m_allocationChunkSize;
+    VkDeviceSize m_allocationChunkSize = 256;
     BufferHandle m_buffer;
 };
 
