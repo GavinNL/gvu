@@ -502,6 +502,7 @@ struct ImageInfo
     }
     VkSampler getNearestSampler() const
     {
+        #pragma message "the image class should keep a SamplerCreate info within which acts like a state-machine so that we can set any of the parameters needed"
         return sampler.nearest;
     }
     VkSampler getLinearSampler() const
