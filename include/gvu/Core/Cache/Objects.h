@@ -47,8 +47,7 @@ struct ImageInfo
      *
      * Sets the data for the first mapmap level for this image.
      */
-    void setData(void * data);
-
+    void setData(const void *data, VkDeviceSize bytes);
 
     /**
      * @brief getImageView
@@ -77,6 +76,46 @@ struct ImageInfo
      */
     VkDescriptorSet getSingleImageSet(uint32_t layer, uint32_t mip);
 
+
+    /**
+     * @brief getSamplerCreateInfo
+     * @param minMagFilter
+     * @param addressMode
+     * @return
+     *
+     * Create a deafult SamplerCreateInfo based on some initial values
+     */
+    static VkSamplerCreateInfo getSamplerCreateInfo(VkFilter minMagFilter, VkSamplerAddressMode addressMode)
+    {
+        VkSamplerCreateInfo ci = {};
+        ci.sType                   =  VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        ci.magFilter               =  minMagFilter;
+        ci.minFilter               =  minMagFilter;
+        ci.mipmapMode              =  VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        ci.addressModeU            =  addressMode;
+        ci.addressModeV            =  addressMode;
+        ci.addressModeW            =  addressMode;
+        ci.mipLodBias              =  0.0f  ;
+        ci.anisotropyEnable        =  VK_FALSE;
+        ci.maxAnisotropy           =  1 ;
+        ci.compareEnable           =  VK_FALSE ;
+        ci.compareOp               =  VK_COMPARE_OP_ALWAYS;
+        ci.minLod                  =  0 ;
+        ci.maxLod                  =  VK_LOD_CLAMP_NONE;
+        ci.borderColor             =  VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+        ci.unnormalizedCoordinates =  VK_FALSE;
+        return ci;
+    }
+
+    /**
+     * @brief getOrCreateSampler
+     * @param c
+     * @return
+     *
+     * Create a sampler with a given sampler create info struct.
+     * If the sampler is already created, it will return that one
+     */
+    VkSampler getOrCreateSampler(VkSamplerCreateInfo c);
 
     /**
      * @brief copyData
@@ -161,6 +200,22 @@ struct ImageInfo
                             VkImageLayout currentLayout,
                             VkImageLayout finalLayout);
 
+    /**
+     * @brief cmdBlitFromImage
+     * @param srcImage
+     * @param srcArrayLayer
+     * @param srcMipLevel
+     * @param srcOffset
+     * @param srcExtents
+     * @param dstImage
+     * @param dstArrayLayer
+     * @param dstMipLevel
+     * @param dstOffset
+     * @param dstExtents
+     *
+     * Copies image data from the srcImage to the dstImage
+     * This does NOT transition the images, this must be done on your own
+     */
     void cmdBlitFromImage(ImageInfo & srcImage,
                           uint32_t srcArrayLayer, uint32_t srcMipLevel,
                           VkOffset3D srcOffset,
@@ -217,6 +272,9 @@ struct ImageInfo
         VkExtent3D dstExtents = getExtents();
         VkOffset3D srcOffset = {};
         VkOffset3D dstOffset = {};
+
+        if(getMipLevels() <= 1)
+            return;
 
         if( mip0CurrentLayout != VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
             cmdTransitionImage(arrayLayer, 0, mip0CurrentLayout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
@@ -513,6 +571,31 @@ struct ImageInfo
         return sampler.linear;
     }
 
+    /**
+     * @brief getSampler
+     * @param filter
+     * @param mode
+     * @return
+     *
+     * Get a internal sampler for this image. If you need more
+     * control over the sampler use getOrCreateSampler(..)
+     */
+    VkSampler getSampler(VkFilter filter, VkSamplerAddressMode mode)
+    {
+        auto it = sampler._samps.find({filter, mode});
+        if(it==sampler._samps.end())
+        {
+            auto ci = getSamplerCreateInfo(filter, mode);
+            auto s = getOrCreateSampler(ci);
+            sampler._samps[{filter,mode}] = s;
+            return s;
+        }
+        else
+        {
+            return it->second;
+        }
+    }
+
     uint32_t pixelSize() const
     {
         return getFormatInfo(info.format).blockSizeInBits / 8;
@@ -541,7 +624,9 @@ protected:
         VkSampler linear  = VK_NULL_HANDLE;
         VkSampler nearest = VK_NULL_HANDLE;
 
-        //VkSampler current = VK_NULL_HANDLE; // do not destroy
+        // these samplers are created in the SamplerCache and should
+        // not be destroyed
+        std::map< std::pair<VkFilter, VkSamplerAddressMode>, VkSampler> _samps;
     } sampler;
 
     // a map of descriptor sets which have been created

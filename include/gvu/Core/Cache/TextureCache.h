@@ -20,6 +20,7 @@
 #include <gvu/Core/FormatInfo.h>
 #include <gvu/Core/Managers/CommandPoolManager.h>
 #include <gvu/Core/Managers/DescriptorPoolManager.h>
+#include <gvu/Core/Cache/SamplerCache.h>
 #include "Objects.h"
 
 namespace gvu
@@ -32,7 +33,7 @@ struct SharedData
     std::vector<TextureHandle> images;
     DescriptorSetLayoutCache   layoutCache;
     DescriptorPoolManager      descriptorPool;
-
+    SamplerCache               samplerCache;
     BufferHandle _stagingBuffer;
 };
 
@@ -66,6 +67,7 @@ public:
         m_sharedData = data;
         m_sharedData->allocator = allocator;
         m_sharedData->layoutCache.init(device);
+        m_sharedData->samplerCache.init(device);
 
         DescriptorSetLayoutCreateInfo dslci;
         dslci.bindings.push_back( VkDescriptorSetLayoutBinding{0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,1,VK_SHADER_STAGE_FRAGMENT_BIT, nullptr});
@@ -101,6 +103,7 @@ public:
         }
 
         m_sharedData->descriptorPool.destroy();
+        m_sharedData->samplerCache.destroy();
         m_sharedData->layoutCache.destroy();
         m_sharedData->commandPool.destroy();
     }
@@ -195,6 +198,10 @@ public:
                                                VkImageLayout     finalLayout,
                                                VkImageUsageFlags usage)
     {
+        // always add sample and transfers
+        usage = usage | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+
         // Loop through all the free images.
         // These are images which were no longer needed, but are still
         // allocated. They can be reused.
@@ -235,6 +242,7 @@ public:
 
 
             id->sharedData = m_sharedData;
+
             return id;
         }
 
@@ -348,7 +356,7 @@ protected:
 
         imageInfo.samples       = VK_SAMPLE_COUNT_1_BIT;// vk::SampleCountFlagBits::e1;
         imageInfo.tiling        = VK_IMAGE_TILING_OPTIMAL;// vk::ImageTiling::eOptimal;
-        imageInfo.usage         = additionalUsageFlags | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;// vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst;
+        imageInfo.usage         = additionalUsageFlags;// | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;// vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst;
         imageInfo.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;// vk::SharingMode::eExclusive;
         imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;// vk::ImageLayout::eUndefined;
 
@@ -414,7 +422,7 @@ protected:
     std::shared_ptr<SharedData>                      m_sharedData;
 };
 
-void BufferInfo::setData(void *data, VkDeviceSize byteSize, VkDeviceSize offset)
+inline void BufferInfo::setData(void *data, VkDeviceSize byteSize, VkDeviceSize offset)
 {
     auto allocator = sharedData->allocator;
 
@@ -469,11 +477,11 @@ inline void BufferInfo::resize(VkDeviceSize bytes)
     }
 }
 
-void ImageInfo::setData(void * data)
+inline void ImageInfo::setData(void const * data, VkDeviceSize bytes)
 {
     auto allocator = sharedData->allocator;
 
-    auto byteSize = getExtents().width * getExtents().height * getFormatInfo(info.format).blockSizeInBits/8;
+    auto byteSize = bytes;//getByteSize();// getExtents().depth * getExtents().width * getExtents().height * getFormatInfo(info.format).blockSizeInBits/8;
 
     if(sharedData->_stagingBuffer)
     {
@@ -501,8 +509,8 @@ void ImageInfo::setData(void * data)
             copy_barrier.dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
             copy_barrier.image                       = getImage();
             copy_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            copy_barrier.subresourceRange.levelCount = 1;
-            copy_barrier.subresourceRange.layerCount = 1;
+            copy_barrier.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+            copy_barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
             copy_barrier.subresourceRange.baseArrayLayer = 0;
             copy_barrier.subresourceRange.baseMipLevel = 0;
             vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &copy_barrier);
@@ -510,7 +518,9 @@ void ImageInfo::setData(void * data)
 
             VkBufferImageCopy region = {};
             region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            region.imageSubresource.layerCount = 1;
+            region.imageSubresource.layerCount = getLayerCount();
+            region.imageSubresource.mipLevel   = 0;
+            region.imageSubresource.baseArrayLayer = 0;
             region.imageExtent.width           = getExtents().width;
             region.imageExtent.height          = getExtents().height;
             region.imageExtent.depth           = getExtents().depth;
@@ -526,8 +536,8 @@ void ImageInfo::setData(void * data)
             use_barrier.dstQueueFamilyIndex              = VK_QUEUE_FAMILY_IGNORED;
             use_barrier.image                            = getImage();
             use_barrier.subresourceRange.aspectMask      = VK_IMAGE_ASPECT_COLOR_BIT;
-            use_barrier.subresourceRange.levelCount      = 1;
-            use_barrier.subresourceRange.layerCount      = 1;
+            use_barrier.subresourceRange.levelCount      = VK_REMAINING_MIP_LEVELS;
+            use_barrier.subresourceRange.layerCount      = VK_REMAINING_ARRAY_LAYERS;
             copy_barrier.subresourceRange.baseArrayLayer = 0;
             copy_barrier.subresourceRange.baseMipLevel   = 0;
             vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, NULL, 0, NULL, 1, &use_barrier);
@@ -538,7 +548,12 @@ void ImageInfo::setData(void * data)
 }
 
 
-void ImageInfo::copyData(void * data, uint32_t width, uint32_t height,
+inline VkSampler ImageInfo::getOrCreateSampler(VkSamplerCreateInfo c)
+{
+    return sharedData->samplerCache.create(c);
+}
+
+inline void ImageInfo::copyData(void * data, uint32_t width, uint32_t height,
                          uint32_t arrayLayer, uint32_t mipLevel,
                          uint32_t x_ImageOffset, uint32_t y_ImageOffset)
 {
@@ -612,7 +627,7 @@ void ImageInfo::copyData(void * data, uint32_t width, uint32_t height,
     }
 }
 
-void ImageInfo::cmdCopyData(void * data, uint32_t width, uint32_t height,
+inline void ImageInfo::cmdCopyData(void * data, uint32_t width, uint32_t height,
                          uint32_t arrayLayer, uint32_t mipLevel,
                          uint32_t x_ImageOffset, uint32_t y_ImageOffset)
 {
@@ -697,7 +712,7 @@ inline void ImageInfo::cmdTransitionImage(std::shared_ptr<ImageInfo> other,uint3
     vkCmdPipelineBarrier(m_updateCommandBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &copy_barrier);
 }
 
-VkDescriptorSet ImageInfo::getSingleImageSet(uint32_t layer, uint32_t mip)
+inline VkDescriptorSet ImageInfo::getSingleImageSet(uint32_t layer, uint32_t mip)
 {
     auto it = arrayMipDescriptorSet.find({layer,mip});
     if(it != arrayMipDescriptorSet.end() )
@@ -721,7 +736,7 @@ VkDescriptorSet ImageInfo::getSingleImageSet(uint32_t layer, uint32_t mip)
     return set;
 }
 
-VkImageView ImageInfo::getImageView(uint32_t layer, uint32_t layerCount, uint32_t mip, uint32_t mipCount, VkImageViewType type)
+inline VkImageView ImageInfo::getImageView(uint32_t layer, uint32_t layerCount, uint32_t mip, uint32_t mipCount, VkImageViewType type)
 {
     ImageViewRange r{layer,layerCount,mip,mipCount,type};
 

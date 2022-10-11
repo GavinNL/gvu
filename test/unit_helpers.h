@@ -47,7 +47,7 @@ std::shared_ptr<vkw::VKWVulkanWindow> createWindow(uint32_t width, uint32_t heig
     // 2. Create the Instance
     vkw::VKWVulkanWindow::InstanceInitilizationInfo2 instanceInfo;
     instanceInfo.debugCallback = &VulkanReportFunc;
-    instanceInfo.vulkanVersion = VK_MAKE_VERSION(1, 2, 0);
+    instanceInfo.vulkanVersion = VK_MAKE_VERSION(1, 3, 0);
     instanceInfo.enabledExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 
     window->createVulkanInstance(instanceInfo);
@@ -65,13 +65,15 @@ std::shared_ptr<vkw::VKWVulkanWindow> createWindow(uint32_t width, uint32_t heig
     vkw::VKWVulkanWindow::DeviceInitilizationInfo2 deviceInfo;
     deviceInfo.deviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
     deviceInfo.deviceExtensions.push_back(VK_EXT_TRANSFORM_FEEDBACK_EXTENSION_NAME);
+    deviceInfo.deviceExtensions.push_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+
+    deviceInfo.enabledFeatures13.dynamicRendering = true;
 
     // enable a new extended feature
     VkPhysicalDeviceVertexInputDynamicStateFeaturesEXT dynamicVertexState = {};
     dynamicVertexState.sType                    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_INPUT_DYNAMIC_STATE_FEATURES_EXT;
     dynamicVertexState.vertexInputDynamicState  = true;
-    deviceInfo.enabledFeatures12.pNext          = &dynamicVertexState;
-
+    deviceInfo.enabledFeatures13.pNext          = &dynamicVertexState;
     window->createVulkanDevice(deviceInfo);
 
     return std::shared_ptr<vkw::VKWVulkanWindow>(window, [](vkw::VKWVulkanWindow * w)

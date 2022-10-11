@@ -547,7 +547,8 @@ struct GraphicsPipelineCreateInfo
             dynamicRenderingInfo.colorAttachmentCount    = static_cast<uint32_t>(outputColorTargetFormats.size());
             dynamicRenderingInfo.pColorAttachmentFormats = outputColorTargetFormats.data();
             dynamicRenderingInfo.depthAttachmentFormat   = depthFormat;
-            dynamicRenderingInfo.stencilAttachmentFormat = depthFormat;
+            dynamicRenderingInfo.stencilAttachmentFormat = depthFormat==VK_FORMAT_D32_SFLOAT ? VK_FORMAT_UNDEFINED: depthFormat;
+
             pipelineInfo.pNext                           = &dynamicRenderingInfo;
         }
 

@@ -24,15 +24,18 @@ namespace gvu
  */
 struct ImageArrayManager
 {
-    static constexpr uint32_t                      maxImages     = 1024;
-    static constexpr uint32_t                      maxImageCubes = 1024;
+    uint32_t                      maxImages     = 1024;
+    uint32_t                      maxImageCubes = 1024;
     std::shared_ptr<gvu::VulkanApplicationContext> m_context = std::make_shared<gvu::VulkanApplicationContext>();
 
-    void init(std::shared_ptr<gvu::VulkanApplicationContext> c )
+
+    void init(std::shared_ptr<gvu::VulkanApplicationContext> c, VkShaderStageFlags _stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT, uint32_t _maxImages=1024, uint32_t _maxImageCubes=1024)
     {
         m_context = c;
 
-        VkShaderStageFlags stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT ;
+        VkShaderStageFlags stageFlags = _stageFlags;
+        maxImages     = _maxImages;
+        maxImageCubes = _maxImageCubes;
 
         gvu::DescriptorSetLayoutCreateInfo ci;
         ci.bindings.push_back(VkDescriptorSetLayoutBinding{0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, maxImages    , stageFlags, nullptr});
@@ -44,17 +47,17 @@ struct ImageArrayManager
         // doesn't exist
         {
             m_nullImage = c->memoryCache.allocateTexture2D(8,8,VK_FORMAT_R8G8B8A8_UNORM,1, VK_IMAGE_USAGE_SAMPLED_BIT);
-            std::vector<uint8_t> _raw(8*8*4, 255);
-            m_nullImage->setData(_raw.data());
+            std::vector<uint8_t> _raw(m_nullImage->getByteSize(), 255);
+            m_nullImage->setData(_raw.data(), _raw.size());
         }
 
         {
             m_nullCubeImage = c->memoryCache.allocateTextureCube(8,VK_FORMAT_R8G8B8A8_UNORM,1, VK_IMAGE_USAGE_SAMPLED_BIT);
-            std::vector<uint8_t> _raw(8*8*6, 255);
-            m_nullCubeImage->setData(_raw.data());
+            std::vector<uint8_t> _raw(m_nullImage->getByteSize(), 255);
+            m_nullCubeImage->setData(_raw.data(), _raw.size());
         }
 
-        images = std::vector<gvu::TextureHandle>(maxImages, m_nullImage);
+        images = std::vector< std::tuple<gvu::TextureHandle, VkFilter, VkSamplerAddressMode> >(maxImages, {m_nullImage,VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT});
         imageCubes = std::vector<gvu::TextureHandle>(maxImageCubes, m_nullCubeImage);
 
         for(uint32_t i=0;i<5;i++)
@@ -88,7 +91,7 @@ struct ImageArrayManager
      * Note that any textures inserted will not be reflected in the
      * descriptor set until updateDirty() is called
      */
-    uint32_t insertTexture2D(gvu::TextureHandle id)
+    uint32_t insertTexture2D(gvu::TextureHandle id, VkFilter F=VK_FILTER_LINEAR, VkSamplerAddressMode mode=VK_SAMPLER_ADDRESS_MODE_REPEAT)
     {
         auto it = imageToIndex.find(id);
         if(it == imageToIndex.end())
@@ -96,9 +99,13 @@ struct ImageArrayManager
             uint32_t i=1;
             for(; i< images.size();i++)
             {
-                if(images[i] == m_nullImage)
+                auto & [h, f, a] = images[i];
+                if( h == m_nullImage)
                 {
-                    images[i] = id;
+                    imageToIndex[id] = i;
+                    h = id;
+                    f = F;
+                    a = mode;
                     setDirty(i);
                     return i;
                 }
@@ -107,8 +114,6 @@ struct ImageArrayManager
         }
         return it->second;
     }
-
-
 
     /**
      * @brief findTexture
@@ -141,9 +146,11 @@ struct ImageArrayManager
         uint32_t i=0;
         for(auto & x : images)
         {
-            if(x==id)
+            auto & [h,f,a] = x;
+            if(h==id)
             {
-                x = m_nullImage;
+                h = m_nullImage;
+                imageToIndex.erase(id);
                 setDirty(i);
             }
             ++i;
@@ -160,8 +167,9 @@ struct ImageArrayManager
             uint32_t i=1;
             for(; i< imageCubes.size();i++)
             {
-                if(imageCubes[i] == m_nullImage)
+                if(imageCubes[i] == m_nullCubeImage)
                 {
+                    imageCubesToIndex[id] = i;
                     imageCubes[i] = id;
                     setTextureCubeDirty(i);
                     return i;
@@ -189,9 +197,11 @@ struct ImageArrayManager
         uint32_t i=0;
         for(auto & x : images)
         {
-            if(x==id)
+            auto & [h,f,a] = x;
+            if(h==id)
             {
-                x = m_nullImage;
+                imageCubesToIndex.erase(id);
+                h = m_nullImage;
                 setTextureCubeDirty(i);
             }
             ++i;
@@ -237,12 +247,17 @@ struct ImageArrayManager
         imageInfo.reserve(maxImages + maxImageCubes);
         std::vector<VkWriteDescriptorSet> writes;
         writes.reserve(descriptorSets.front().dirty.size() + descriptorSets.front().imageCubeDirty.size());
-        for(auto index : descriptorSets.front().dirty)
+
+        auto & setInfo = descriptorSets.front();
+        for(auto index : setInfo.dirty)
         {
             auto & I = imageInfo.emplace_back();
+            auto & iP = images.at(index);
+            auto & [handle, filter, addressMode] = iP;
+
             I.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            I.imageView   = images.at(index)->getImageView();
-            I.sampler     = images.at(index)->getLinearSampler();
+            I.imageView   = handle->getImageView();
+            I.sampler     = filter == VK_FILTER_NEAREST ?  handle->getNearestSampler() : handle->getLinearSampler();
 
             VkWriteDescriptorSet write = {};
             write.sType                = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -281,13 +296,34 @@ struct ImageArrayManager
         }
     }
 
+    void destroy()
+    {
+        for(auto & s : descriptorSets)
+        {
+            m_context->descriptorSetAllocator.releaseToPool(s.set);
+        }
+        descriptorSets.clear();
+        images.clear();
+        imageCubes.clear();
+        imageToIndex.clear();
+        imageCubesToIndex.clear();
+        m_nullImage = {};
+        m_nullCubeImage = {};
+
+    }
+
+    auto & getImages()
+    {
+        return images;
+    }
 protected:
     gvu::TextureHandle m_nullImage;
     gvu::TextureHandle m_nullCubeImage;
     VkDescriptorSetLayout m_layout = VK_NULL_HANDLE;
 
-    std::vector<gvu::TextureHandle>                  images;
-    std::vector<gvu::TextureHandle>                  imageCubes;
+
+    std::vector< std::tuple<gvu::TextureHandle, VkFilter, VkSamplerAddressMode> > images;
+    std::vector< gvu::TextureHandle>                  imageCubes;
     std::unordered_map<gvu::TextureHandle, uint32_t> imageToIndex;
     std::unordered_map<gvu::TextureHandle, uint32_t> imageCubesToIndex;
 
