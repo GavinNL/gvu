@@ -12,9 +12,15 @@
 #include <gvu/Core/Cache/PipelineLayoutCache.h>
 #include <gvu/Core/GraphicsPipelineCreateInfo.h>
 #include <gvu/Extension/spirvPipelineReflector.h>
-#include <GLSLCompiler.h>
+#include <gvu/Advanced/GLSLCompiler.h>
 
 #include "Pipeline.h"
+
+
+#if __has_include(<spdlog/spdlog.h>)
+#define GVU_HAS_SPDLOG
+#include <spdlog/spdlog.h>
+#endif
 
 namespace gvu
 {
@@ -163,6 +169,19 @@ inline void GraphicsPipeline::build()
     reflector.addSPIRVCode(fragmentStage.spirvCode, VK_SHADER_STAGE_FRAGMENT_BIT);
 
     auto pipelineLayoutCreateInfo = reflector.generateCombinedPipelineLayoutCreateInfo();
+
+    size_t s=0;
+#if defined GVU_HAS_SPDLOG
+    for(auto & S : pipelineLayoutCreateInfo.setLayoutInfos)
+    {
+        spdlog::debug("Set: {}", s);
+        for(auto & b : S.bindings)
+        {
+            spdlog::debug("Binding: {}  Count: {}  Stage: {:x}  type: {}", b.binding, b.descriptorCount, static_cast<int>(b.stageFlags), static_cast<int>(b.descriptorType));
+        }
+        s++;
+    }
+#endif
     createInfo.pipelineLayout = pipelineLayoutCreateInfo.create(context->pipelineLayoutCache, context->descriptorSetLayoutCache);
 
     uint32_t set=0;

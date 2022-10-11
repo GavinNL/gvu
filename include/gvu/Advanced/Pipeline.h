@@ -5,7 +5,7 @@
 #include <cassert>
 #include <gvu/Extension/spirvPipelineReflector.h>
 #include <gvu/Core/GraphicsPipelineCreateInfo.h>
-#include <GLSLCompiler.h>
+#include <gvu/Advanced/GLSLCompiler.h>
 
 namespace gvu
 {
@@ -99,7 +99,7 @@ struct ShaderStage
 
     void compile()
     {
-        gnl::GLSLCompiler compiler;
+        gvu::GLSLCompiler compiler;
         for(auto & [key, value] : compileTimeDefinitions)
         {
             compiler.addCompleTimeDefinition(key, value);

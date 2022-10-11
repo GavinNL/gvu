@@ -53,6 +53,8 @@ foreach(file ${files})
                                     Vulkan::Vulkan
                                     CONAN_PKG::spirv-cross
                                     CONAN_PKG::vulkan-memory-allocator
+                                    CONAN_PKG::glslang
+                                    CONAN_PKG::spdlog
                                     gvu::gvu
                                     vkw::vkw)
 
