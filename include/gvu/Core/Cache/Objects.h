@@ -740,6 +740,24 @@ struct BufferInfo
     {
         m_itr = 0;
     }
+
+    bool isDeviceMemory() const
+    {
+        return getMemoryProperties() & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    }
+
+    bool isMappable() const
+    {
+        return getMemoryProperties() & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+    }
+
+    VkMemoryPropertyFlags getMemoryProperties() const
+    {
+        VkMemoryPropertyFlags d;
+        vmaGetAllocationMemoryProperties(allocator, allocation, &d);
+        return d;
+    }
+
     static auto _roundUp(size_t numToRound, size_t multiple) -> size_t
     {
         //assert(multiple);
