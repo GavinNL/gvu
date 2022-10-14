@@ -35,7 +35,7 @@ SCENARIO( " Scenario 1: Create a Sampler" )
 
 
 
-    auto B1 = memoryCache.allocateBuffer(513, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+    auto B1 = memoryCache.allocateStagingBuffer(513);
 
     REQUIRE(B1->getBufferSize() == 3*256);
 
@@ -46,11 +46,20 @@ SCENARIO( " Scenario 1: Create a Sampler" )
     B1.reset();
 
     // allocate another buffer with a similar size and usage
-    auto B2 = memoryCache.allocateBuffer(599, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+    auto B2 = memoryCache.allocateStagingBuffer(567);
+    REQUIRE(B2->isMappable() == true);
+    REQUIRE(B2->isDeviceMemory() == false);
 
     // will return the old one
     REQUIRE(B2.get() == raw);
 
+    auto S1 = memoryCache.allocateStorageBuffer(1024, true, false);
+    REQUIRE( S1->isMappable() == true);
+    REQUIRE( S1->isDeviceMemory() == false);
+
+    auto S2 = memoryCache.allocateStorageBuffer(1024, false, false);
+    REQUIRE( S2->isMappable() == false);
+    REQUIRE( S2->isDeviceMemory() == true);
     memoryCache.destroy();
 
     vmaDestroyAllocator(allocator);

@@ -59,7 +59,8 @@ public:
     void init(VkPhysicalDevice physicalDevice,
               VkDevice         device,
               VkQueue          graphicsQueue,
-              VmaAllocator     allocator)
+              VmaAllocator     allocator,
+              VkDeviceSize     stagingBufferSize = 1024*1024*16)
     {
         auto data = std::make_shared<SharedData>();
 
@@ -74,7 +75,7 @@ public:
         auto layout = m_sharedData->layoutCache.create(dslci);
         m_sharedData->descriptorPool.init(device, &m_sharedData->layoutCache, layout, 1024);
 
-        m_sharedData->_stagingBuffer = allocateBuffer(1024*1024*4, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        m_sharedData->_stagingBuffer = allocateStagingBuffer(stagingBufferSize);
     }
 
     /**
@@ -85,19 +86,16 @@ public:
      */
     void destroy()
     {
-        auto & m_images = m_sharedData->images;
-        while(m_images.size())
-        {
-            auto useCount = m_images.back().use_count();
-            if( useCount > 1)
-            {
-                std::cerr << "WARNING: Image " << m_images.back().get() << " is still being referenced! Use Count: " << useCount << std::endl;
-            }
-            destroyTexture(*m_images.back());
-            m_images.pop_back();
-        }
-
         m_sharedData->_stagingBuffer.reset();
+
+        for(auto & B : m_sharedData->images)
+        {
+            if( B.use_count() > 1)
+            {
+                std::cerr << "WARNING: Image " << B->getImage() << " is still being referenced! Use Count: " << B.use_count() << std::endl;
+            }
+            _destroyTexture(*B);
+        }
 
         for(auto & B : m_sharedData->buffers)
         {
@@ -105,8 +103,11 @@ public:
             {
                 std::cerr << "WARNING: Buffer " << B->getBuffer() << " is still being referenced! Use Count: " << B.use_count() << std::endl;
             }
-            destroyBuffer(*B);
+            _destroyBuffer(*B);
         }
+
+        m_sharedData->buffers.clear();
+        m_sharedData->images.clear();
 
         m_sharedData->descriptorPool.destroy();
         m_sharedData->samplerCache.destroy();
@@ -114,6 +115,51 @@ public:
         m_sharedData->commandPool.destroy();
     }
 
+
+    /**
+     * @brief freeUnusedBuffers
+     *
+     * If there are any buffer handles whose use_count() == 1, free the memory
+     */
+    size_t freeUnusedBuffers()
+    {
+        auto & bf = m_sharedData->buffers;
+        for(auto & B : bf)
+        {
+            if(B.use_count() == 1)
+            {
+                _destroyBuffer(*B);
+            }
+        }
+
+        auto last = std::remove_if(bf.begin(), bf.end(), [](auto &B)
+        {
+            return B.get() == nullptr;
+        });
+        auto count = std::distance(last, bf.end());
+        bf.erase(last, bf.end());
+        return size_t(count);
+    }
+
+    size_t freeUnusedImages()
+    {
+        auto & bf = m_sharedData->images;
+        for(auto & B : bf)
+        {
+            if(B.use_count() == 1)
+            {
+                _destroyTexture(*B);
+            }
+        }
+
+        auto last = std::remove_if(bf.begin(), bf.end(), [](auto &B)
+        {
+            return B.get() == nullptr;
+        });
+        auto count = std::distance(last, bf.end());
+        bf.erase(last, bf.end());
+        return size_t(count);
+    }
 
     /**
      * @brief allocateTexture2D
@@ -142,6 +188,85 @@ public:
         return allocateTexture({length,length,1}, format, VK_IMAGE_VIEW_TYPE_CUBE, 6, mipLevels, VK_IMAGE_LAYOUT_UNDEFINED, usage);
     }
 
+
+    BufferHandle allocateVertexBuffer(size_t bytes)
+    {
+        return allocateBuffer(bytes,
+                              VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                              VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+                              {});
+    }
+    BufferHandle allocateIndexBuffer(size_t bytes)
+    {
+        return allocateBuffer(bytes,
+                              VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                              VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+                              {});
+    }
+    BufferHandle allocateVertexIndexBuffer(size_t bytes)
+    {
+        return allocateBuffer(bytes,
+                              VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                              VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+                              {});
+    }
+    BufferHandle allocateStagingBuffer(size_t bytes)
+    {
+        return allocateBuffer(bytes,
+                              VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                              VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
+                              VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+    }
+
+    /**
+     * @brief allocateStorageBuffer
+     * @param bytes
+     * @param mappable
+     * @param randomAccess
+     * @return
+     *
+     * Allocate a ShaderStorageBuffer. If mappable == true, then it will allocate
+     * the buffer so that it can be host maped.
+     * if mappable == true and randomAcess=true, it will allow random access
+     * to the mappable storage buffer, otherwise sequential access.
+     */
+    BufferHandle allocateStorageBuffer(size_t bytes, bool mappable = false, bool randomAccess = false)
+    {
+        if(mappable)
+        {
+            return allocateBuffer(bytes,
+                                  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                  VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
+                                  randomAccess ? VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT : VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+        }
+        else
+        {
+            return allocateBuffer(bytes,
+                                  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                  VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+                                  {});
+        }
+    }
+
+    BufferHandle allocateUniformBuffer(size_t bytes, bool mappable = false, bool randomAccess = false)
+    {
+        if(mappable)
+        {
+            return allocateBuffer(bytes,
+                                  VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                  VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
+                                  randomAccess ? VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT : VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+        }
+        else
+        {
+            return allocateBuffer(bytes,
+                                  VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                  VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+                                  {});
+        }
+    }
+
+
     /**
      * @brief allocateBuffer
      * @param bytes
@@ -151,7 +276,7 @@ public:
      *
      * Allocate a buffer. The buffer's size will always be a multiple of 256
      */
-    BufferHandle allocateBuffer(size_t bytes, VkBufferUsageFlags usage, VmaMemoryUsage memUsage)
+    BufferHandle allocateBuffer(size_t bytes, VkBufferUsageFlags usage, VmaMemoryUsage memUsage, VmaAllocationCreateFlags allocFlags)
     {
         bytes = BufferInfo::_roundUp(bytes, 256);
 
@@ -173,9 +298,7 @@ public:
 
         VmaAllocationCreateInfo & allocCInfo = b->allocationCreateInfo;
         allocCInfo.usage = memUsage;
-        allocCInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT; // can always set this bit,
-                                                             // vma will not allow device local
-                                                             // memory to be mapped
+        allocCInfo.flags = allocFlags;
 
         VkBuffer &         buffer     = b->buffer;
         VmaAllocation &    allocation = b->allocation;
@@ -299,10 +422,15 @@ public:
     {
         return m_sharedData->images.size();
     }
+    size_t getAllocatedBufferCount() const
+    {
+        return m_sharedData->buffers.size();
+    }
+
 
 protected:
 
-    void destroyTexture(ImageInfo & I)
+    void _destroyTexture(ImageInfo & I)
     {
         auto dev = m_sharedData->commandPool.getDevice();
 
@@ -329,7 +457,7 @@ protected:
         //I.mipMapViews.clear();
     }
 
-    void destroyBuffer(BufferInfo & B)
+    void _destroyBuffer(BufferInfo & B)
     {
         if(B.mapped)
         {
