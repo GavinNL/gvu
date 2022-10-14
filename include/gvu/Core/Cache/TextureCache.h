@@ -31,6 +31,7 @@ struct SharedData
     gvu::CommandPoolManager    commandPool;
     VmaAllocator               allocator = nullptr;
     std::vector<TextureHandle> images;
+    std::vector<BufferHandle>  buffers;
     DescriptorSetLayoutCache   layoutCache;
     DescriptorPoolManager      descriptorPool;
     SamplerCache               samplerCache;
@@ -54,7 +55,6 @@ class MemoryCache
 public:
 
     using texture_handle_type = TextureHandle;
-
 
     void init(VkPhysicalDevice physicalDevice,
               VkDevice         device,
@@ -97,9 +97,15 @@ public:
             m_images.pop_back();
         }
 
-        if(m_sharedData->_stagingBuffer)
+        m_sharedData->_stagingBuffer.reset();
+
+        for(auto & B : m_sharedData->buffers)
         {
-            m_sharedData->_stagingBuffer->destroy();
+            if(B.use_count() > 1)
+            {
+                std::cerr << "WARNING: Buffer " << B->getBuffer() << " is still being referenced! Use Count: " << B.use_count() << std::endl;
+            }
+            destroyBuffer(*B);
         }
 
         m_sharedData->descriptorPool.destroy();
@@ -107,6 +113,7 @@ public:
         m_sharedData->layoutCache.destroy();
         m_sharedData->commandPool.destroy();
     }
+
 
     /**
      * @brief allocateTexture2D
@@ -142,10 +149,20 @@ public:
      * @param memUsage
      * @return
      *
-     * Allocate a buffer
+     * Allocate a buffer. The buffer's size will always be a multiple of 256
      */
     BufferHandle allocateBuffer(size_t bytes, VkBufferUsageFlags usage, VmaMemoryUsage memUsage)
     {
+        bytes = BufferInfo::_roundUp(bytes, 256);
+
+        for(auto & B : m_sharedData->buffers)
+        {
+            if(B.use_count() == 1 && B->getBufferSize() == bytes && B->bufferInfo.usage == usage && B->allocationCreateInfo.usage == memUsage)
+            {
+                return B;
+            }
+        }
+
         auto b = std::make_shared<BufferInfo>();
         b->allocator = getAllocator();
 
@@ -171,6 +188,8 @@ public:
            throw std::runtime_error( "Error allocating VMA Buffer");
         }
         b->sharedData = m_sharedData;
+
+        m_sharedData->buffers.push_back(b);
         return b;
     }
 
@@ -308,6 +327,18 @@ protected:
         //I.imageView      = VK_NULL_HANDLE;
         I.sampler.linear = I.sampler.nearest = VK_NULL_HANDLE;
         //I.mipMapViews.clear();
+    }
+
+    void destroyBuffer(BufferInfo & B)
+    {
+        if(B.mapped)
+        {
+            vmaUnmapMemory(B.allocator, B.allocation);
+            B.mapped = nullptr;
+        }
+        vmaDestroyBuffer(B.allocator, B.buffer, B.allocation);
+        B.buffer = VK_NULL_HANDLE;
+        B.allocation = nullptr;
     }
 
     texture_handle_type _findAvailable(VkFormat format, VkExtent3D extent, VkImageViewType viewType, VkImageUsageFlags usage, uint32_t arrayLayers, uint32_t mipMaps)
@@ -456,10 +487,20 @@ inline void BufferInfo::setData(void *data, VkDeviceSize byteSize, VkDeviceSize 
 
 inline void BufferInfo::resize(VkDeviceSize bytes)
 {
-    destroy();
+    {
+        auto & B = *this;
+        if(B.mapped)
+        {
+            vmaUnmapMemory(B.allocator, B.allocation);
+            B.mapped = nullptr;
+        }
+        vmaDestroyBuffer(B.allocator, B.buffer, B.allocation);
+        B.buffer = VK_NULL_HANDLE;
+        B.allocation = nullptr;
+    }
 
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size  = bytes;
+    bufferInfo.size  = BufferInfo::_roundUp(bytes, 256);
     //bufferInfo.usage = usage;
 
     VmaAllocationCreateInfo & allocCInfo = allocationCreateInfo;

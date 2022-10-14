@@ -722,17 +722,6 @@ struct BufferInfo
     {
         vmaFlushAllocation(allocator, allocation, 0, VK_WHOLE_SIZE);
     }
-    void destroy()
-    {
-        if(mapped)
-        {
-            vmaUnmapMemory(allocator, allocation);
-            mapped = nullptr;
-        }
-        vmaDestroyBuffer(allocator, buffer, allocation);
-        buffer = VK_NULL_HANDLE;
-        allocation = nullptr;
-    }
 
     /**
      * @brief resize
