@@ -106,7 +106,7 @@ struct VulkanApplicationContext : std::enable_shared_from_this<VulkanApplication
      */
     std::shared_ptr<gvu::BufferInfo> createBuffer(size_t bytes, VkBufferUsageFlags usage, VmaMemoryUsage memUsage)
     {
-        return memoryCache.allocateBuffer(bytes, usage, memUsage);
+        return memoryCache.allocateBuffer(bytes, usage, memUsage, {});
     }
 
 

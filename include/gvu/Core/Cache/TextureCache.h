@@ -633,7 +633,7 @@ inline void BufferInfo::resize(VkDeviceSize bytes)
 
     VmaAllocationCreateInfo & allocCInfo = allocationCreateInfo;
     //allocCInfo.usage = memUsage;
-    allocCInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT; // can always set this bit,
+    //allocCInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT; // can always set this bit,
     // vma will not allow device local
     // memory to be mapped
 
