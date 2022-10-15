@@ -13,6 +13,10 @@ struct VulkanApplicationContext;
 
 struct PipelineBase
 {
+    PipelineBase(std::shared_ptr<VulkanApplicationContext> p) : context(p)
+    {
+
+    }
     VkPipeline getPipeline() const
     {
         return pipeline;
@@ -55,7 +59,12 @@ struct ShaderStage
     std::vector<uint32_t>                        spirvCode;
     std::vector<std::filesystem::path>           includePaths;
     std::map<std::string, std::string>           compileTimeDefinitions;
+    VkShaderModule module = VK_NULL_HANDLE;
 
+    ShaderStage(std::shared_ptr<VulkanApplicationContext> p) : context(p)
+    {
+
+    }
     /**
      * @brief loadVertexGLSL
      * @param p
@@ -77,12 +86,12 @@ struct ShaderStage
         }
         return *this;
     }
+
     ShaderStage& setGLSL(std::string const & srcString)
     {
         glslCode = std::move(srcString);
         return *this;
     }
-
 
     ShaderStage& appendIncludePath(std::filesystem::path const & p)
     {
@@ -145,6 +154,14 @@ struct ShaderStage
         spirvCode = compiler.compile(glslCode, _type);
     }
 
+    /**
+     * @brief getModule
+     * @return
+     *
+     * Returns the vulkan shader module. Compiles it if
+     * it hasn't been compiled
+     */
+    VkShaderModule getModule();
 
     std::shared_ptr<VulkanApplicationContext> context;
       friend struct VulkanApplicationContext;
@@ -153,9 +170,23 @@ struct ShaderStage
 
 struct ComputePipeline : public PipelineBase
 {
+    ComputePipeline(std::shared_ptr<VulkanApplicationContext> p) : PipelineBase(p), computeStage(p)
+    {
+        computeStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        computeStage.addCompileTimeDefinition("VULKAN_STAGE", "FRAGMENT");
+    }
     VkPipelineLayout getPipelineLayout() const
     {
         return createInfo.layout;
+    }
+
+    void setShaderSourceFile(std::filesystem::path const & p)
+    {
+        computeStage.loadGLSL(p);
+    }
+    void setShaderSourceCode(std::string const & s)
+    {
+        computeStage.setGLSL(s);
     }
 
     /**
@@ -179,7 +210,7 @@ struct ComputePipeline : public PipelineBase
     }
 protected:
     VkComputePipelineCreateInfo createInfo = {VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
-    ShaderStage computeStage = {VK_SHADER_STAGE_COMPUTE_BIT};
+    ShaderStage computeStage;
     friend class VulkanApplicationContext;
 };
 
@@ -192,18 +223,30 @@ protected:
  */
 struct GraphicsPipeline : public PipelineBase
 {
-
 public:
+    GraphicsPipeline(std::shared_ptr<VulkanApplicationContext> p) : PipelineBase(p),
+                                                                    vertexStage(p),
+                                                                    fragmentStage(p)
+    {
+        vertexStage.stage = VK_SHADER_STAGE_VERTEX_BIT;
+        fragmentStage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+        vertexStage.addCompileTimeDefinition("VULKAN_STAGE", "VERTEX");
+        fragmentStage.addCompileTimeDefinition("VULKAN_STAGE", "FRAGMENT");
+    }
+
     std::shared_ptr<GraphicsPipeline> clone() const
     {
         auto p = std::make_shared<GraphicsPipeline>(*this);
         p->pipeline = VK_NULL_HANDLE;
         return p;
     }
+
     VkPipelineLayout getPipelineLayout() const
     {
         return createInfo.pipelineLayout;
     }
+
     VkRenderPass getRenderPass() const
     {
         return createInfo.renderPass;
@@ -228,6 +271,23 @@ public:
      */
     void destroy();
 
+
+    void setVertexShaderSourceFile(std::filesystem::path const & p)
+    {
+        vertexStage.loadGLSL(p);
+    }
+    void setFragmentShaderSourceFile(std::filesystem::path const & p)
+    {
+        fragmentStage.loadGLSL(p);
+    }
+    void setVertexShaderSourceCode(std::string const & src)
+    {
+        vertexStage.setGLSL(src);
+    }
+    void setFragmentShaderSourceCode(std::string const & src)
+    {
+        fragmentStage.setGLSL(src);
+    }
 
     ShaderStage& getVertexStage()
     {
@@ -264,14 +324,17 @@ public:
     }
 protected:
     gvu::GraphicsPipelineCreateInfo createInfo;
-    ShaderStage vertexStage = {VK_SHADER_STAGE_VERTEX_BIT};
-    ShaderStage fragmentStage  = {VK_SHADER_STAGE_FRAGMENT_BIT};
+    ShaderStage vertexStage;
+    ShaderStage fragmentStage;
 
     friend struct VulkanApplicationContext;
 };
 
 using GraphicsPipelineHandle = std::shared_ptr<GraphicsPipeline>;
 using ComputePipelineHandle  = std::shared_ptr<ComputePipeline>;
+
+
+
 }
 
 #endif

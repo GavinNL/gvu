@@ -3,16 +3,16 @@
 
 #include <iostream>
 #include <cassert>
-#include <gvu/Core/Managers/CommandPoolManager.h>
-#include <gvu/Core/Managers/DescriptorPoolManager.h>
-#include <gvu/Core/Cache/TextureCache.h>
-#include <gvu/Core/Cache/SamplerCache.h>
-#include <gvu/Core/Cache/DescriptorSetLayoutCache.h>
-#include <gvu/Core/Cache/RenderPassCache.h>
-#include <gvu/Core/Cache/PipelineLayoutCache.h>
-#include <gvu/Core/GraphicsPipelineCreateInfo.h>
-#include <gvu/Extension/spirvPipelineReflector.h>
-#include <gvu/Advanced/GLSLCompiler.h>
+#include "../Core/Managers/CommandPoolManager.h"
+#include "../Core/Managers/DescriptorPoolManager.h"
+#include "../Core/Cache/TextureCache.h"
+#include "../Core/Cache/SamplerCache.h"
+#include "../Core/Cache/DescriptorSetLayoutCache.h"
+#include "../Core/Cache/RenderPassCache.h"
+#include "../Core/Cache/PipelineLayoutCache.h"
+#include "../Core/GraphicsPipelineCreateInfo.h"
+//#include "../Advanced/GLSLCompiler.h"
+//#include "../Extension/spirvPipelineReflector.h"
 
 #include "Pipeline.h"
 
@@ -119,11 +119,7 @@ struct VulkanApplicationContext : std::enable_shared_from_this<VulkanApplication
      */
     std::shared_ptr<GraphicsPipeline> makeGraphicsPipeline()
     {
-        auto p = std::make_shared<GraphicsPipeline>();
-        p->context = shared_from_this();
-        p->vertexStage.context = p->context;
-        p->fragmentStage.context = p->context;
-        return p;
+        return std::make_shared<GraphicsPipeline>(shared_from_this());
     }
 
     /**
@@ -134,10 +130,7 @@ struct VulkanApplicationContext : std::enable_shared_from_this<VulkanApplication
      */
     std::shared_ptr<ComputePipeline> makeComputePipeline()
     {
-        std::shared_ptr<ComputePipeline> p = std::make_shared<ComputePipeline>();
-        p->context = shared_from_this();
-        p->computeStage.context = p->context;
-        return p;
+        return std::make_shared<ComputePipeline>(shared_from_this());
     }
 
     VkDescriptorSet allocateDescriptorSet(VkDescriptorSetLayout layout)
@@ -152,6 +145,28 @@ struct VulkanApplicationContext : std::enable_shared_from_this<VulkanApplication
 };
 
 
+inline VkShaderModule ShaderStage::getModule()
+{
+    if(module == VK_NULL_HANDLE)
+    {
+        compile();
+
+        VkShaderModuleCreateInfo ci = {};
+        ci.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        ci.codeSize = static_cast<uint32_t>(spirvCode.size() * 4);
+        ci.pCode    = spirvCode.data();
+
+        VkShaderModule sh = {};
+        auto result = vkCreateShaderModule(context->getDevice(), &ci, nullptr, &sh);
+        if(result != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed at compiling shader");
+        }
+        module = sh;
+    }
+    return module;
+}
+
 inline void GraphicsPipeline::destroy()
 {
     vkDestroyPipeline(context->getDevice(), pipeline, nullptr);
@@ -161,8 +176,8 @@ inline void GraphicsPipeline::build()
 {
     {
 
-        createInfo.vertexShader = _createShader(vertexStage.spirvCode);
-        createInfo.fragmentShader = _createShader(fragmentStage.spirvCode);
+        createInfo.vertexShader = vertexStage.getModule();// _createShader(vertexStage.spirvCode);
+        createInfo.fragmentShader = fragmentStage.getModule();//_createShader(fragmentStage.spirvCode);
     }
 
     reflector.addSPIRVCode(vertexStage.spirvCode, VK_SHADER_STAGE_VERTEX_BIT);
@@ -246,7 +261,7 @@ inline void ComputePipeline::build()
 
     {
         createInfo.stage.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        createInfo.stage.module = _createShader(computeStage.spirvCode);
+        createInfo.stage.module = computeStage.getModule();//_createShader(computeStage.spirvCode);
         createInfo.stage.pName  = "main";
         createInfo.stage.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
     }
@@ -292,6 +307,7 @@ inline VkShaderModule PipelineBase::_createShader(std::vector<uint32_t> code)
     }
     return sh;
 }
+
 }
 
 #endif
