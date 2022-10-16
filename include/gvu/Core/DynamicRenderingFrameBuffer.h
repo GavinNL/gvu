@@ -39,9 +39,10 @@ struct DynamicRenderingFrameBuffer
 
         colorImages.at(attachmentIndex) = h;
         auto & colorAttachment = colorAttachments.at(attachmentIndex);
-        colorAttachment.sType            = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+        colorAttachment.sType            = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
         colorAttachment.imageView        = h->getImageView();
-        colorAttachment.imageLayout      = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR;
+        colorAttachment.imageLayout      = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+        colorAttachment.resolveMode      = VK_RESOLVE_MODE_NONE;
         colorAttachment.loadOp           = VK_ATTACHMENT_LOAD_OP_CLEAR;
         colorAttachment.storeOp          = VK_ATTACHMENT_STORE_OP_STORE;
         //colorAttachment.clearValue.color.float32 = { 0.0f,0.0f,0.0f,0.0f };
@@ -50,12 +51,13 @@ struct DynamicRenderingFrameBuffer
 
     void setDepthAttachment(gvu::TextureHandle h)
     {
-        depthAttachment.sType            = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+        depthAttachment.sType            = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
         depthAttachment.imageView        = h->getImageView();
-        depthAttachment.imageLayout      = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL_KHR;
+        depthAttachment.imageLayout      = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
         depthAttachment.loadOp           = VK_ATTACHMENT_LOAD_OP_CLEAR;
         depthAttachment.storeOp          = VK_ATTACHMENT_STORE_OP_STORE;
         //colorAttachment.clearValue.color.float32 = { 0.0f,0.0f,0.0f,0.0f };
+        depthAttachment.clearValue                   = {1.0f, 0};
         depthImage = h;
 
        // if(gvu::getFormatInfo(h->getFormat()).flags & gvu::FORMAT_SIZE_STENCIL_BIT)
@@ -115,6 +117,17 @@ struct DynamicRenderingFrameBuffer
         renderingInfo.renderArea = { {int32_t(offsetx), int32_t(offsety)},{ width, height }};
     }
 
+    VkViewport getViewport() const
+    {
+        return VkViewport{ static_cast<float>(renderingInfo.renderArea.offset.x),
+                           static_cast<float>(renderingInfo.renderArea.offset.y),
+                           static_cast<float>(renderingInfo.renderArea.extent.width),
+                           static_cast<float>(renderingInfo.renderArea.extent.height),0.f,1.0f};
+    }
+    VkRect2D getRenderArea() const
+    {
+        return renderingInfo.renderArea;
+    }
     /**
      * @brief beginRendering
      * @param cmd
@@ -128,16 +141,16 @@ struct DynamicRenderingFrameBuffer
      * you should calle endRendering() when you are finished
      * rendering to this framebuffer
      */
-    void beginRendering(VkCommandBuffer cmd, bool convertImages=true)
+    void beginRendering(VkCommandBuffer cmd, bool convertImages=true, bool defaultViewPortAndScissor=true)
     {
         //VkRenderingInfoKHR renderingInfo{};
-        renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+        renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
         //renderingInfo.renderArea = { 0, 0, width, height };
         renderingInfo.layerCount = 1;
         renderingInfo.colorAttachmentCount = static_cast<uint32_t>(colorAttachments.size());
         renderingInfo.pColorAttachments    = colorAttachments.data();
-        renderingInfo.pDepthAttachment     = &depthAttachment;
-        renderingInfo.pStencilAttachment   = &depthAttachment;
+        renderingInfo.pDepthAttachment     = depthAttachment.imageView != VK_NULL_HANDLE ? &depthAttachment : nullptr;
+        renderingInfo.pStencilAttachment   = stencilAttachment.imageView != VK_NULL_HANDLE ? &stencilAttachment : nullptr;
 
         if(convertImages)
         {
@@ -150,7 +163,15 @@ struct DynamicRenderingFrameBuffer
         }
 
         // Begin dynamic rendering
-        vkCmdBeginRenderingKHR(cmd, &renderingInfo);
+        vkCmdBeginRendering(cmd, &renderingInfo);
+
+        if(defaultViewPortAndScissor)
+        {
+            VkViewport vp = getViewport();
+            auto ra = getRenderArea();
+            vkCmdSetScissor( cmd,0, 1, &ra);
+            vkCmdSetViewport(cmd,0, 1, &vp);
+        }
     }
 
     /**
@@ -167,6 +188,7 @@ struct DynamicRenderingFrameBuffer
                       bool convertColorImagesToSampled=true,
                       bool convertDepthImagesToSampled=true)
     {
+        vkCmdEndRendering(cmd);
         if(convertColorImagesToSampled)
         {
             for(auto & i : colorImages)
@@ -181,9 +203,10 @@ struct DynamicRenderingFrameBuffer
     std::vector<gvu::TextureHandle>           colorImages;
     gvu::TextureHandle                        depthImage;
 
-    std::vector<VkRenderingAttachmentInfoKHR> colorAttachments = {};
-    VkRenderingAttachmentInfoKHR              depthAttachment = {};
-    VkRenderingInfoKHR                        renderingInfo = {};
+    std::vector<VkRenderingAttachmentInfo   > colorAttachments = {};
+    VkRenderingAttachmentInfo                 depthAttachment = {};
+    VkRenderingAttachmentInfo                 stencilAttachment = {};
+    VkRenderingInfo                           renderingInfo = {};
 };
 
 

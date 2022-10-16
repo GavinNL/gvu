@@ -242,13 +242,6 @@ inline void GraphicsPipeline::build()
         }
         return p2;
     });
-
-
-    vkDestroyShaderModule(context->getDevice(), createInfo.vertexShader  , nullptr);
-    vkDestroyShaderModule(context->getDevice(), createInfo.fragmentShader, nullptr);
-
-    createInfo.vertexShader = VK_NULL_HANDLE;
-    createInfo.fragmentShader = VK_NULL_HANDLE;
 }
 
 inline void ComputePipeline::destroy()
@@ -307,6 +300,16 @@ inline VkShaderModule PipelineBase::_createShader(std::vector<uint32_t> code)
     }
     return sh;
 }
+
+inline ShaderStage::~ShaderStage()
+{
+    if(module)
+    {
+        vkDestroyShaderModule(context->getDevice(), module, nullptr);
+        module = VK_NULL_HANDLE;
+    }
+}
+
 
 }
 

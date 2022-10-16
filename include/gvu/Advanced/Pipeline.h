@@ -65,6 +65,7 @@ struct ShaderStage
     {
 
     }
+    ~ShaderStage();
     /**
      * @brief loadVertexGLSL
      * @param p
@@ -257,6 +258,11 @@ public:
         createInfo.renderPass = rp;
     }
 
+    void bindPipeline(VkCommandBuffer cmd)
+    {
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, getPipeline());
+    }
+
     /**
      * @brief build
      *
@@ -267,7 +273,11 @@ public:
     /**
      * @brief destroy
      *
-     * Destroy the pipeline
+     * Destroy the VkPipeline handle, does not release any
+     * shader modules. Those will be released when
+     * the destructor is called.
+     *
+     * You can call build again to rebuild the pipeline
      */
     void destroy();
 
@@ -332,6 +342,7 @@ protected:
 
 using GraphicsPipelineHandle = std::shared_ptr<GraphicsPipeline>;
 using ComputePipelineHandle  = std::shared_ptr<ComputePipeline>;
+
 
 
 
