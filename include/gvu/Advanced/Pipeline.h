@@ -175,6 +175,7 @@ struct ComputePipeline : public PipelineBase
     {
         computeStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
         computeStage.addCompileTimeDefinition("VULKAN_STAGE", "FRAGMENT");
+        createInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
     }
     VkPipelineLayout getPipelineLayout() const
     {
@@ -210,7 +211,7 @@ struct ComputePipeline : public PipelineBase
         return computeStage;
     }
 protected:
-    VkComputePipelineCreateInfo createInfo = {VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+    VkComputePipelineCreateInfo createInfo = {};
     ShaderStage computeStage;
     friend class VulkanApplicationContext;
 };

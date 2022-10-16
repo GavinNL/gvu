@@ -163,7 +163,11 @@ public:
     /**
      * @brief resetAllAvailablePools
      *
-     * Resets all the pools that have had their descriptor sets returned to them
+     * Resets all the pools that have had their descriptor sets returned to them.
+     *
+     * This function should be called only called before or after all your
+     * command buffers have been submitted so that no descriptor sets
+     * are currently bound to  a command buffer
      */
     void resetAllAvailablePools(bool forceResetAll=false)
     {
@@ -270,6 +274,13 @@ protected:
     VkDescriptorPoolCreateInfo        m_createInfo = {};
 };
 
+
+/**
+ * @brief The DescriptorSetAllocator class
+ *
+ * The descriptor set allocator is uesd to allocated descriptor sets given
+ * ANY DescriptorSetLayout
+ */
 class DescriptorSetAllocator
 {
 public:
@@ -286,6 +297,13 @@ public:
         m_pools.clear();
     }
 
+    /**
+     * @brief allocate
+     * @param ci
+     * @return
+     *
+     * Allocate a descriptor set given a layout create info
+     */
     VkDescriptorSet allocate(DescriptorSetLayoutCreateInfo const &ci)
     {
         auto l = m_cache->create(ci);
@@ -320,10 +338,33 @@ public:
         }
     }
 
+    /**
+     * @brief releaseToPool
+     * @param set
+     *
+     * Release this descriptor set back to the pool
+     */
     void releaseToPool(VkDescriptorSet set)
     {
         auto l = m_setToLayout.at(set);
         m_pools.at(l)->releaseToPool(set);
+    }
+
+    /**
+     * @brief resetAllAvailablePools
+     * @param forceResetAll
+     *
+     * Resets all the available pools that had their descriptor sets retuned to them.
+     *
+     * This function should only be called if there are no command buffers currently in
+     * flight
+     */
+    void resetAllAvailablePools(bool forceResetAll=false)
+    {
+        for(auto & [a,b] : m_pools)
+        {
+            b->resetAllAvailablePools(forceResetAll);
+        }
     }
 
     size_t descriptorPoolCount() const
@@ -335,6 +376,7 @@ public:
         }
         return c;
     }
+
     size_t descriptorSetCount() const
     {
         size_t c=0;
@@ -345,7 +387,6 @@ public:
         return c;
     }
 protected:
-
     DescriptorSetLayoutCache * m_cache;
     std::unordered_map<VkDescriptorSetLayout, std::shared_ptr<DescriptorPoolManager> > m_pools;
     std::unordered_map<VkDescriptorSet, VkDescriptorSetLayout> m_setToLayout;

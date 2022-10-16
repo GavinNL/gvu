@@ -130,6 +130,11 @@ struct SubBuffer
     {
         return offset() / alignment();
     }
+
+    auto getParentHandle()
+    {
+        return m_handle;
+    }
 protected:
     BufferHandle m_handle;
 
@@ -231,7 +236,7 @@ public:
                 if(E->allocationSize() >= allocationSize)
                 {
                     auto B = std::make_shared<SubBuffer>(*E);
-
+                    B->m_handle = m_buffer;
                     B->m_allocationSize   = allocationSize;
                     B->m_allocationOffset = E->allocationOffset();
                     B->m_size             = s;

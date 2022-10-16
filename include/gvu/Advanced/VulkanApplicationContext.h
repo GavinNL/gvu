@@ -275,9 +275,6 @@ inline void ComputePipeline::build()
     {
         throw std::runtime_error("Failed at compiling pipeline");
     }
-
-    vkDestroyShaderModule(context->getDevice(), createInfo.stage.module, nullptr);
-    createInfo.stage.module = VK_NULL_HANDLE;
 }
 
 inline VkDescriptorSet PipelineBase::allocateDescriptorSet(uint32_t setNumber) const
