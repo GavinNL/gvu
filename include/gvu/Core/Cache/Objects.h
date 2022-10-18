@@ -688,6 +688,13 @@ struct BufferInfo
      */
     void setData(void *data, VkDeviceSize byteSize, VkDeviceSize offset);
 
+    template<typename T>
+    void setData(T const & D, size_t index)
+    {
+        auto w = static_cast<unsigned char*>(mapData()) + index*sizeof(D);
+        std::memcpy(w, &D, sizeof(D));
+    }
+
     VkBuffer getBuffer() const
     {
         return buffer;
@@ -736,6 +743,7 @@ struct BufferInfo
     {
         return static_cast<uint32_t>(push_back(v, count, sizeof(T) ));
     }
+
     void clearStorageIterator()
     {
         m_itr = 0;
@@ -807,6 +815,30 @@ using BufferHandle   = std::shared_ptr<BufferInfo>;
 using TextureHandle   = std::shared_ptr<ImageInfo>;
 using WTextureHandle  = std::weak_ptr<ImageInfo>;
 
+/**
+ * @brief The BufferBase class
+ *
+ * A base class used for higher level objects
+ * that are backed by buffers
+ */
+struct BufferBase
+{
+    BufferHandle getHandle()
+    {
+        return m_handle;
+    }
+    BufferHandle getHandle() const
+    {
+        return m_handle;
+    }
+    VkBuffer getBuffer() const
+    {
+        return m_handle->getBuffer();
+    }
+
+protected:
+    BufferHandle m_handle;
+};
 
 }
 #endif

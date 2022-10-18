@@ -58,12 +58,8 @@ namespace gvu
  *     T2_data.data[ T2_startIndex + i]
  *
  */
-struct SubBuffer
+struct SubBuffer : public BufferBase
 {
-    VkBuffer buffer() const
-    {
-        return m_handle->getBuffer();
-    }
     /**
      * @brief offset
      * @return
@@ -131,13 +127,7 @@ struct SubBuffer
         return offset() / alignment();
     }
 
-    auto getParentHandle()
-    {
-        return m_handle;
-    }
 protected:
-    BufferHandle m_handle;
-
     // the actual buffer size and the offset
     // from the host buffer
     VkDeviceSize m_allocationOffset = 0;
@@ -159,9 +149,17 @@ using SubBufferHandle   = std::shared_ptr<SubBuffer>;
  * a single buffer (ie: 100M) and then allocating sections
  * of that to use for various purposes.
  */
-class SubBufferManager
+class SubBufferManager : public BufferBase
 {
 public:
+    ~SubBufferManager()
+    {
+        for(auto & m : m_allocations)
+        {
+            m = {};
+        }
+        m_allocations.clear();
+    }
     /**
      * @brief setBuffer
      * @param h
@@ -175,7 +173,7 @@ public:
      */
     void setBuffer(BufferHandle h, VkDeviceSize allocationChunkSize=256)
     {
-        m_buffer = h;
+        m_handle = h;
         m_allocationChunkSize = allocationChunkSize;
         auto m_emptyMemory = std::make_shared<SubBuffer>();
         m_emptyMemory->m_allocationOffset = 0;
@@ -186,6 +184,11 @@ public:
         m_emptyMemory->m_alignment = 1;
 
         m_allocations.push_back(m_emptyMemory);
+    }
+
+    void bindIndex(VkCommandBuffer cmd, VkIndexType _indexType)
+    {
+        vkCmdBindIndexBuffer(cmd, m_handle->getBuffer(), 0, _indexType);
     }
 
     /**
@@ -236,7 +239,7 @@ public:
                 if(E->allocationSize() >= allocationSize)
                 {
                     auto B = std::make_shared<SubBuffer>(*E);
-                    B->m_handle = m_buffer;
+                    B->m_handle           = m_handle;
                     B->m_allocationSize   = allocationSize;
                     B->m_allocationOffset = E->allocationOffset();
                     B->m_size             = s;
@@ -271,6 +274,36 @@ public:
     }
 
 
+    /**
+     * @brief mergeFreeAllocations
+     *
+     * If there are any consequtive allocations which are not
+     * being used, combine them into a single allocation
+     */
+    void mergeFreeAllocations()
+    {
+        // bump the size requirements to be multiples of the alignment
+        //s = BufferInfo::_roundUp(s, alignment);
+        //s = s % alignment == 0 ? s : (s/alignment+1)*alignment;
+
+        assert(m_allocations.size() > 0);
+        for(auto it=std::prev(m_allocations.end()); ;)
+        {
+            auto & E = *it;
+            // use_count() == 1 means this chunk was allocate
+            // but no longer used
+            if(E.use_count() == 1)
+            {
+                // check if any of the next allocations are
+                // able to be merged into this empty allocation
+                _mergeForward(it);
+
+            }
+            if( it == m_allocations.begin())
+                break;
+            --it;
+        }
+    }
     /**
      *
      * Allocate a buffer using a specifc type. This is
@@ -359,10 +392,8 @@ protected:
         return false;
     }
 
-
     std::list<SubBufferHandle> m_allocations;
     VkDeviceSize m_allocationChunkSize = 256;
-    BufferHandle m_buffer;
 };
 
 

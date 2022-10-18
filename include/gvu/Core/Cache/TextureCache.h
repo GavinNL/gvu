@@ -581,10 +581,16 @@ protected:
     std::shared_ptr<SharedData>                      m_sharedData;
 };
 
+
 inline void BufferInfo::setData(void *data, VkDeviceSize byteSize, VkDeviceSize offset)
 {
     auto allocator = sharedData->allocator;
 
+    if(isMappable())
+    {
+        std::memcpy(static_cast<uint8_t*>(mapData()) + offset, data, byteSize);
+        return;
+    }
     if(sharedData->_stagingBuffer)
     {
         if( sharedData->_stagingBuffer->getBufferSize() < byteSize)
