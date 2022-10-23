@@ -6,7 +6,15 @@
 
 namespace gul
 {
-void drawAllocation(gvu::SubBufferManager & M)
+
+/**
+ * @brief drawAllocation
+ * @param M
+ *
+ * Draw all the allocations in the sub buffer manager
+ * Also provides a button to free the unused allocations
+ */
+inline void drawAllocation(gvu::SubBufferManager & M)
 {
 
     auto & A = M.allocations();
