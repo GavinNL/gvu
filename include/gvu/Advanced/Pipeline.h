@@ -205,6 +205,19 @@ struct ComputePipeline : public PipelineBase
      */
     void destroy();
 
+    void bindPipeline(VkCommandBuffer cmd)
+    {
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, getPipeline());
+    }
+    void bindDescriptorSet(VkCommandBuffer cmd, uint32_t setNumber, VkDescriptorSet s)
+    {
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, getPipelineLayout(), setNumber, 1, &s,0, nullptr);
+    }
+    void pushConstants(VkCommandBuffer cmd, uint32_t offset, uint32_t size, void const * data)
+    {
+        vkCmdPushConstants(cmd, getPipelineLayout(), VK_SHADER_STAGE_COMPUTE_BIT, offset, size, data);
+    }
+
 
     ShaderStage & getComputeStage()
     {
@@ -263,7 +276,14 @@ public:
     {
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, getPipeline());
     }
-
+    void bindDescriptorSet(VkCommandBuffer cmd, uint32_t setNumber, VkDescriptorSet s)
+    {
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, getPipelineLayout(), setNumber, 1, &s,0, nullptr);
+    }
+    void pushConstants(VkCommandBuffer cmd, uint32_t offset, uint32_t size, void const * data)
+    {
+        vkCmdPushConstants(cmd, getPipelineLayout(), VK_PIPELINE_BIND_POINT_GRAPHICS, offset, size, data);
+    }
     /**
      * @brief build
      *
