@@ -26,6 +26,270 @@ struct storage_index
 };
 
 /**
+ * @brief The BufferVector class
+ *
+ * A BufferVector is similar to a std::vector, but the data
+ * is stored in a vulkan storage buffer
+ *
+ * You must call setBuffer( ) and provide it a handle to the buffer
+ * you want to use.
+ *
+ * The buffer can be host visible or GPU only. If the bufer is
+ * GPU only, the vector will allocate a std::vector internally
+ * in host memory
+ */
+template<typename _Value, typename _bufferHandleType=BufferHandle>
+struct BufferVector
+{
+    using value_type  = _Value;
+    using buffer_type = _bufferHandleType;
+
+    bool _isMappable = false;
+
+    BufferVector()
+    {
+    }
+
+    BufferVector(buffer_type h)
+    {
+        setBuffer(h);
+    }
+
+    void setBuffer(buffer_type h)
+    {
+        m_buffer = h;
+        _isMappable = h->isMappable();
+    }
+
+    /**
+     * @brief capacity
+     * @return
+     *
+     * Returns the maximum number of elements this buffer can hold.
+     *
+     */
+    size_t capacity() const
+    {
+        return m_buffer->getBufferSize() / sizeof(value_type);
+    }
+
+    /**
+     * @brief size
+     * @return
+     *
+     * Returns the current size of the vector. This will return
+     * the maxium size (capacity()) if the buffer is host mapable.
+     * If the buffer is GPU only, i will return the size of the
+     * internal host vector
+     */
+    size_t size() const
+    {
+        return m_hostData.size();
+
+    }
+    /**
+     * @brief clear
+     *
+     * Clears the host vector and sets its size to zero. Data
+     * in the GPU buffer will remain unchanged
+     */
+    void clear()
+    {
+        m_hostData.clear();
+    }
+
+    /**
+     * @brief push_back
+     * @param v
+     *
+     * Pushes data onto the host vector and sets
+     * that element as dirty. The GPU buffer will
+     * not be updated until updateDirty( )
+     * is called.
+     *
+     * This will fail if the
+     */
+    void push_back(value_type && v)
+    {
+        m_hostData.push_back(v);
+        m_pushDirty.push_back( m_hostData.size() - 1);
+    }
+
+    /**
+     * @brief setDirty
+     * @param index
+     *
+     * Sets a specific index to be flagged as dirty
+     * so that it will be updated the next time updateDirty()
+     * is called
+     */
+    void setDirty(size_t index)
+    {
+        if(!_isMappable)
+        {
+            m_pushDirty.push_back(index);
+        }
+        else
+        {
+            m_buffer->setData( m_hostData[index], index);
+        }
+    }
+
+    /**
+     * @brief resize
+     * @param s
+     *
+     * Resizes the host data vector. This does not
+     * change any data on the GPU
+     */
+    void resize(size_t s)
+    {
+        if(s >= capacity())
+            throw std::runtime_error("Base buffer is not large enough");
+        m_hostData.resize(s);
+    }
+
+    /**
+     * @brief setValue
+     * @param v
+     * @param index
+     *
+     * Sets the value of a specific index. If the buffer is
+     * host mappable, the value will be updated immediately.
+     * If the buffer is GPU only, the data will be cached
+     * and updated when updateDirty( ) is called
+     */
+    void setValue(size_t index, value_type const & v)
+    {
+        m_hostData.at(index) = v;
+        setDirty(index);
+    }
+
+
+    /**
+     * @brief requiredStagingBufferSize
+     * @return
+     *
+     * Returns the size of the staging buffer required
+     * to update the dirty buffer values. This
+     * value will return 0 if no data needs to be updated
+     * or if the buffer is host mappable
+     */
+    VkDeviceSize requiredStagingBufferSize() const
+    {
+        return m_pushDirty.size() * sizeof(value_type);
+    }
+
+    /**
+     * @brief pushDirty
+     * @param cmd
+     * @param h
+     *
+     * Copies all the dirty values from the host into the
+     * gpu buffer. You must provide a staging buffer which
+     * is at least requiredStagingBufferSize()
+     *
+     * If the buffer is host mappable, this function does nothing
+     */
+    template<typename _stagingBufferHandle>
+    void pushDirty(VkCommandBuffer cmd, _stagingBufferHandle h)
+    {
+        if(_isMappable)
+            return;
+
+        std::vector<VkBufferCopy> regions;
+        //#define mockCopy
+        #if defined mockCopy
+        #else
+        auto _mapped = static_cast<uint8_t*>(h->mapData());
+        #endif
+
+        uint32_t _srcOffset=0;
+        std::sort(m_pushDirty.begin(), m_pushDirty.end());
+        auto _end = std::unique(m_pushDirty.begin(), m_pushDirty.end());
+
+        chunk_by(m_pushDirty.begin(), _end, [](auto &a, auto &b)
+        {
+            return !(a+1 == b);
+        },
+        [&](auto &&i, auto &&j)
+        {
+            auto objectsToCopy = static_cast<size_t>(std::distance(i,j));
+
+            #if defined mockCopy
+            #else
+            std::memcpy( _mapped, &(*i), sizeof(value_type)*objectsToCopy);
+            #endif
+
+            auto & r = regions.emplace_back();
+            r.srcOffset = _srcOffset;
+            r.dstOffset = *i * sizeof(value_type);
+            r.size = sizeof(value_type) * objectsToCopy;
+
+            #if defined mockCopy
+                std::cout << "srcByte: " << _srcOffset << "   dstByte: " << r.dstOffset << "   byteCount: " << r.size << std::endl;
+            #endif
+
+            _srcOffset += r.size;
+        });
+
+        #if defined mockCopy
+        #else
+        vkCmdCopyBuffer(cmd, m_buffer->getBuffer(), h->getBuffer(), static_cast<uint32_t>(regions.size()), regions.data());
+        #endif
+        m_pushDirty.clear();
+    }
+
+
+    /**
+     * @brief dirtyCount
+     * @return
+     *
+     * Returns the number of elements which are flagged as dirty.
+     * This value may be larger than the actual number as the same
+     * index can be flagged multiple times. Calling updateDirty()
+     * will only update each index once though.
+     */
+    size_t dirtyCount() const
+    {
+        return m_pushDirty.size();
+    }
+    void printDirty()
+    {
+        for(auto & i : m_pushDirty)
+        {
+            std::cout << i << ", ";
+        }
+        std::cout << std::endl;
+    }
+
+    auto getHandle()
+    {
+        return m_buffer;
+    }
+protected:
+    _bufferHandleType m_buffer;
+    std::vector<value_type> m_hostData;
+    std::vector<size_t> m_pushDirty;
+
+    template<typename it, typename _comp, typename _eva>
+    void chunk_by(it _begin, it _end, _comp && cmp, _eva && eva)
+    {
+        auto i = _begin;
+        while( i != _end )
+        {
+            auto j = std::adjacent_find(i, _end, cmp);
+            if(j != _end)
+            {
+                ++j;
+            }
+            eva(i,j);
+            i = j;
+        }
+    }
+};
+
+/**
  * @brief The BufferMap class
  *
  * The BufferMap is similar to a std::map, it stores
@@ -35,16 +299,23 @@ struct storage_index
  *
  */
 template<typename _Key, typename _Value>
-struct BufferMap
+struct BufferMap : protected BufferVector<_Value, BufferHandle>
 {
     using key_type = _Key;
     using value_type = _Value;
+    using buffer_vector_type = BufferVector<_Value, BufferHandle>;
 
-    void setBuffer(gvu::BufferHandle h)
+    BufferMap()
     {
-        m_buffer = h;
     }
 
+    BufferMap(BufferHandle h)
+    {
+        buffer_vector_type::setBuffer(h);
+    }
+
+    using buffer_vector_type::setBuffer;
+    using buffer_vector_type::getHandle;
     /**
      * @brief insert
      * @param k
@@ -82,26 +353,33 @@ struct BufferMap
             }
             else
             {
-                if(_count < maxSize())
-                {
-                    s = _count;
-                    ++_count;
-                }
-                else
-                {
-                    return {};
-                }
+                buffer_vector_type::resize( buffer_vector_type::size() + 1);
+                s = buffer_vector_type::size()-1;
             }
 
-            auto pa = m_keyToIndex.insert( {k, {v,s}});
-            setValue(v, s);
+            m_keyToIndex.insert( {k, s});
         }
         else //
         {
-            s = it->second.second;
+            s = it->second;
         }
-        setValue(v, s);
+        buffer_vector_type::setValue(s, v);
         return { uint32_t(s)};
+    }
+
+    /**
+     * @brief find
+     * @param k
+     * @return
+     *
+     * Find the index where the value to the key is stored
+     */
+    storage_index<value_type> find(key_type const & k) const
+    {
+        auto it = m_keyToIndex.find(k);
+        if(it == m_keyToIndex.end())
+            return {};
+        return { uint32_t(it->second) };
     }
 
     /**
@@ -124,21 +402,6 @@ struct BufferMap
     }
 
     /**
-     * @brief find
-     * @param k
-     * @return
-     *
-     * Find the index where the value to the key is stored
-     */
-    storage_index<value_type> find(key_type const & k) const
-    {
-        auto it = m_keyToIndex.find(k);
-        if(it == m_keyToIndex.end())
-            return {};
-        return { uint32_t(it->second.second) };
-    }
-
-    /**
      * @brief size
      * @return
      *
@@ -151,16 +414,11 @@ struct BufferMap
     }
 
 protected:
-    void setValue(value_type const & v, size_t index)
-    {
-        m_buffer->setData(v,index);
-    }
     size_t maxSize() const
     {
-        return m_buffer->getBufferSize() / sizeof(value_type);
+        return this->m_buffer->getBufferSize()  / sizeof(value_type);
     }
-    gvu::BufferHandle m_buffer;
-    std::unordered_map<_Key, std::pair<value_type,size_t> > m_keyToIndex;
+    std::unordered_map<_Key, size_t > m_keyToIndex;
     std::vector<size_t> m_availableIndex;
     size_t _count=0;
 };
