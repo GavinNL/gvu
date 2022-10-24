@@ -127,6 +127,10 @@ struct SubBuffer : public BufferBase
         return offset() / alignment();
     }
 
+    void * mapData()
+    {
+        return static_cast<uint8_t*>(m_handle->mapData()) + offset();
+    }
 protected:
     // the actual buffer size and the offset
     // from the host buffer
