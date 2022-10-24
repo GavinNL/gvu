@@ -204,7 +204,7 @@ struct BufferVector
         auto _mapped = static_cast<uint8_t*>(h->mapData());
         #endif
 
-        uint32_t _srcOffset=0;
+        uint32_t _srcOffset = h->offset();
         std::sort(m_pushDirty.begin(), m_pushDirty.end());
         auto _end = std::unique(m_pushDirty.begin(), m_pushDirty.end());
 
@@ -218,24 +218,25 @@ struct BufferVector
 
             #if defined mockCopy
             #else
-            std::memcpy( _mapped, &(*i), sizeof(value_type)*objectsToCopy);
+            std::memcpy( _mapped, &m_hostData[*i], sizeof(value_type)*objectsToCopy);
             #endif
 
             auto & r = regions.emplace_back();
+
             r.srcOffset = _srcOffset;
             r.dstOffset = *i * sizeof(value_type);
-            r.size = sizeof(value_type) * objectsToCopy;
+            r.size      = sizeof(value_type) * objectsToCopy;
 
             #if defined mockCopy
                 std::cout << "srcByte: " << _srcOffset << "   dstByte: " << r.dstOffset << "   byteCount: " << r.size << std::endl;
             #endif
-
+            _mapped    += r.size;
             _srcOffset += r.size;
         });
 
         #if defined mockCopy
         #else
-        vkCmdCopyBuffer(cmd, m_buffer->getBuffer(), h->getBuffer(), static_cast<uint32_t>(regions.size()), regions.data());
+        vkCmdCopyBuffer(cmd, h->getBuffer(), m_buffer->getBuffer(), static_cast<uint32_t>(regions.size()), regions.data());
         #endif
         m_pushDirty.clear();
     }
@@ -282,9 +283,15 @@ protected:
             if(j != _end)
             {
                 ++j;
+                eva(i,j);
+                i = j;
             }
-            eva(i,j);
-            i = j;
+            else
+            {
+                eva(i,_end);
+                break;
+            }
+
         }
     }
 };
@@ -316,6 +323,14 @@ struct BufferMap : protected BufferVector<_Value, BufferHandle>
 
     using buffer_vector_type::setBuffer;
     using buffer_vector_type::getHandle;
+    using buffer_vector_type::requiredStagingBufferSize;
+    using buffer_vector_type::setDirty;
+
+    template<typename _stagingBufferHandle>
+    void pushDirty(VkCommandBuffer cmd, _stagingBufferHandle h)
+    {
+        buffer_vector_type::pushDirty(cmd, h);
+    }
     /**
      * @brief insert
      * @param k
