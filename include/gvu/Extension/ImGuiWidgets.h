@@ -14,11 +14,11 @@ namespace gul
  * Draw all the allocations in the sub buffer manager
  * Also provides a button to free the unused allocations
  */
-inline void drawAllocation(gvu::SubBufferManager & M)
+inline void drawAllocation(gvu::SubBufferManager & M, std::string const & name, uint32_t bytesPerPixel)
 {
 
     auto & A = M.allocations();
-    ImGui::Begin("Allocations");
+    ImGui::Begin(name.c_str());
 
     if(ImGui::Button("Free"))
     {
@@ -34,7 +34,7 @@ inline void drawAllocation(gvu::SubBufferManager & M)
     for(auto &a : A)
     {
         auto remainingSpace = ImGui::GetContentRegionAvail().x;
-        auto s = a->allocationSize() / 1024;
+        auto s = a->allocationSize() / bytesPerPixel;
         ImGui::PushStyleColor(ImGuiCol_Button, a.use_count() == 1 ? freeColors[(++j)%2]: allocatedColors[(++i)%3]);
 
         ImGui::PushID(&a);
@@ -55,7 +55,8 @@ inline void drawAllocation(gvu::SubBufferManager & M)
         }
         ImGui::PopID();
         ImGui::PopStyleColor(1);
-        ImGui::SameLine();
+
+        if( &a != &A.back() ) ImGui::SameLine();
     }
     ImGui::PopStyleVar(1);
     ImGui::End();
