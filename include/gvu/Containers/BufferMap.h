@@ -428,6 +428,10 @@ struct BufferMap : protected BufferVector<_Value, BufferHandle>
         return m_keyToIndex.size();
     }
 
+    size_t capacity() const
+    {
+        return maxSize();
+    }
 protected:
     size_t maxSize() const
     {
