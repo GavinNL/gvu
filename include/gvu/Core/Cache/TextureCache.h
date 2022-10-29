@@ -387,7 +387,10 @@ public:
 
             return id;
         }
-
+    }
+    auto & getCommandPool()
+    {
+        return m_sharedData->commandPool;
     }
 
     VkDevice getDevice() const
