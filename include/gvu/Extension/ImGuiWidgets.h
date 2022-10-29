@@ -4,7 +4,7 @@
 #include "../Core/Managers/SubBufferManager.h"
 #include <imgui.h>
 
-namespace gul
+namespace gvu
 {
 
 /**
@@ -60,6 +60,32 @@ inline void drawAllocation(gvu::SubBufferManager & M, std::string const & name, 
     }
     ImGui::PopStyleVar(1);
     ImGui::End();
+}
+
+inline void drawCubeFaces(gvu::TextureHandle h, uint32_t mip, float w = ImGui::GetContentRegionAvail().x)
+{
+    w /= 4.0f;
+    ImVec2 imgSize = {w,w};
+
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
+
+    ImGui::Dummy(imgSize);ImGui::SameLine();
+    ImGui::Image(h->getSingleImageSet(2, mip), imgSize); ImGui::SameLine();
+    ImGui::Dummy(imgSize);ImGui::SameLine();
+    ImGui::Dummy(imgSize);
+
+
+    ImGui::Image(h->getSingleImageSet(1, mip), imgSize); ImGui::SameLine();
+    ImGui::Image(h->getSingleImageSet(4, mip), imgSize); ImGui::SameLine();
+    ImGui::Image(h->getSingleImageSet(0, mip), imgSize); ImGui::SameLine();
+    ImGui::Image(h->getSingleImageSet(5, mip), imgSize);
+
+    ImGui::Dummy(imgSize);ImGui::SameLine();
+    ImGui::Image(h->getSingleImageSet(3, mip), imgSize); ImGui::SameLine();
+    ImGui::Dummy(imgSize);ImGui::SameLine();
+    ImGui::Dummy(imgSize);
+
+    ImGui::PopStyleVar(1);
 }
 
 }
