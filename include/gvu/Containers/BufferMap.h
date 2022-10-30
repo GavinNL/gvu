@@ -236,7 +236,10 @@ struct BufferVector
 
         #if defined mockCopy
         #else
-        vkCmdCopyBuffer(cmd, h->getBuffer(), m_buffer->getBuffer(), static_cast<uint32_t>(regions.size()), regions.data());
+        if(regions.size())
+        {
+            vkCmdCopyBuffer(cmd, h->getBuffer(), m_buffer->getBuffer(), static_cast<uint32_t>(regions.size()), regions.data());
+        }
         #endif
         m_pushDirty.clear();
     }
