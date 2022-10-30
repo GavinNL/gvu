@@ -121,7 +121,10 @@ struct BufferVector
      *
      * Sets a specific index to be flagged as dirty
      * so that it will be updated the next time updateDirty()
-     * is called
+     * is called.
+     *
+     * If the underlying buffer is host mappable, this value
+     * is updated immediately
      */
     void setDirty(size_t index)
     {
@@ -165,7 +168,24 @@ struct BufferVector
         setDirty(index);
     }
 
-
+    /**
+     * @brief at
+     * @param index
+     * @return
+     *
+     * Returns the host value at the index specified.
+     * If you modify this value, you must call setDirty(index) after
+     * to update it in the GPU.
+     *
+     */
+    value_type& at(size_t index)
+    {
+        return m_hostData.at(index);
+    }
+    value_type const & at(size_t index) const
+    {
+        return m_hostData.at(index);
+    }
     /**
      * @brief requiredStagingBufferSize
      * @return
@@ -390,7 +410,9 @@ struct BufferMap : protected BufferVector<_Value, BufferHandle>
      * @param k
      * @return
      *
-     * Find the index where the value to the key is stored
+     * Find the index where the value to the key is stored.
+     *  YOu can then use this index using the atIndex( )
+     *  function
      */
     storage_index<value_type> find(key_type const & k) const
     {
@@ -400,6 +422,33 @@ struct BufferMap : protected BufferVector<_Value, BufferHandle>
         return { uint32_t(it->second) };
     }
 
+    /**
+     * @brief at
+     * @param k
+     * @return
+     *
+     * Returns a reference to the value associated with
+     * the specific key
+     */
+    value_type& atKey(key_type const & k)
+    {
+        auto id = buffer_vector_type::find(k);
+        buffer_vector_type::at(id.index);
+    }
+    value_type const& atKey(key_type const & k) const
+    {
+        auto id = buffer_vector_type::find(k);
+        buffer_vector_type::at(id.index);
+    }
+
+    value_type& atIndex(storage_index<value_type> index)
+    {
+        return buffer_vector_type::at(index.index);
+    }
+    value_type const & atIndex(storage_index<value_type> index) const
+    {
+        return buffer_vector_type::at(index.index);
+    }
     /**
      * @brief remove
      * @param k
@@ -431,6 +480,12 @@ struct BufferMap : protected BufferVector<_Value, BufferHandle>
         return m_keyToIndex.size();
     }
 
+    /**
+     * @brief capacity
+     * @return
+     *
+     * Returns the maximum number of items this buffermap can hold
+     */
     size_t capacity() const
     {
         return maxSize();
