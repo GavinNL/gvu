@@ -26,6 +26,104 @@ namespace gvu
 
 struct SharedData;
 
+struct MemoryInfoBase
+{
+public:
+    void updateTimestamp()
+    {
+        timestamp = std::chrono::system_clock::now();
+    }
+
+    /**
+     * @brief getAge
+     *
+     * Returns the time since the the timestamp was updated.
+     *
+     * You can use this to determine whether a buffer/image
+     * has been used reciently (ie: each time you bind it, update the timestamp)
+     * If it hasn't been used in a while, you can unload it and reload it
+     * the next time it gets used
+     */
+    double getAge() const
+    {
+        auto t0 = std::chrono::system_clock::now();
+        return std::chrono::duration<double>(t0-timestamp).count();
+    }
+
+    void setName(std::string const & n)
+    {
+        name = n;
+    }
+
+    std::string const & getName() const
+    {
+        return name;
+    }
+
+    uint64_t getByteSize() const
+    {
+        return allocationInfo.size;
+    }
+
+    bool isDeviceMemory() const
+    {
+        return getMemoryProperties() & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    }
+
+    VkMemoryPropertyFlags getMemoryProperties() const
+    {
+        VkMemoryPropertyFlags d;
+        vmaGetAllocationMemoryProperties(allocator, allocation, &d);
+        return d;
+    }
+
+    bool isMappable() const
+    {
+        return getMemoryProperties() & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+    }
+
+    void flush()
+    {
+        vmaFlushAllocation(allocator, allocation, 0, VK_WHOLE_SIZE);
+    }
+
+    /**
+     * @brief mapData
+     * @return
+     *
+     * Map data, but only if it is host mappable
+     */
+    void* mapData()
+    {
+        if(mapped)
+        {
+            return mapped;
+        }
+        vmaMapMemory(allocator, allocation, &mapped);
+        return mapData();
+    }
+
+    VkDeviceSize getAllocationSize() const
+    {
+        return allocationInfo.size;
+    }
+
+
+    VkDevice getDevice() const;
+
+protected:
+    std::shared_ptr<SharedData>               sharedData;
+    std::string                               name;
+    std::chrono::system_clock::time_point     timestamp = std::chrono::system_clock::now();
+    VmaAllocation                             allocation     = nullptr;
+    VmaAllocationInfo                         allocationInfo = {};
+    VmaAllocator                              allocator;
+    VmaAllocationCreateInfo                   allocationCreateInfo = {};
+    void * mapped = nullptr;
+    friend class MemoryCache;
+};
+
+
 struct ImageViewRange
 {
     uint32_t layer;
@@ -39,7 +137,7 @@ struct ImageViewRange
     }
 };
 
-struct ImageInfo
+struct ImageInfo : public MemoryInfoBase
 {
     /**
      * @brief setData
@@ -600,10 +698,7 @@ struct ImageInfo
     {
         return getFormatInfo(info.format).blockSizeInBits / 8;
     }
-    uint64_t getByteSize() const
-    {
-        return byteSize;
-    }
+
     VkFormat getFormat() const
     {
         return info.format;
@@ -611,14 +706,10 @@ struct ImageInfo
 
 protected:
     VkImage                  image      = VK_NULL_HANDLE;
-//    VkImageView              imageView  = VK_NULL_HANDLE;
     VkImageCreateInfo        info       = {};
-    VmaAllocation            allocation = nullptr;
-    VmaAllocationInfo        allocInfo  = {};
     VkImageViewType          viewType;
-//    std::vector<VkImageView> mipMapViews; // one image view per mipmap
     std::map<ImageViewRange, VkImageView> m_imageViews;
-    uint64_t byteSize = 0;
+
     struct
     {
         VkSampler linear  = VK_NULL_HANDLE;
@@ -633,11 +724,8 @@ protected:
     // for a specific layer/mip level. Mostly only used
     // for ImGui
     std::map< std::pair<uint32_t, uint32_t>, VkDescriptorSet > arrayMipDescriptorSet;
-    // a single descriptor set which is used for this
-    // image so that it can be passed to IMGUI
-    //VkDescriptorSet singleDescriptorSet = VK_NULL_HANDLE;
 
-    std::shared_ptr<SharedData> sharedData;
+
     bool selfManaged = true;
     VkCommandBuffer m_updateCommandBuffer = VK_NULL_HANDLE;
     friend class MemoryCache;
@@ -676,7 +764,7 @@ protected:
 };
 
 
-struct BufferInfo
+struct BufferInfo : public MemoryInfoBase
 {
     /**
      * @brief setData
@@ -705,31 +793,6 @@ struct BufferInfo
         return bufferInfo.size;
     }
 
-    VkDeviceSize getAllocationSize() const
-    {
-        return allocationInfo.size;
-    }
-
-    /**
-     * @brief mapData
-     * @return
-     *
-     * Map data, but only if it is host mappable
-     */
-    void* mapData()
-    {
-        if(mapped)
-        {
-            return mapped;
-        }
-        vmaMapMemory(allocator, allocation, &mapped);
-        return mapData();
-    }
-    void flush()
-    {
-        vmaFlushAllocation(allocator, allocation, 0, VK_WHOLE_SIZE);
-    }
-
     /**
      * @brief resize
      * @param size
@@ -749,23 +812,6 @@ struct BufferInfo
         m_itr = 0;
     }
 
-    bool isDeviceMemory() const
-    {
-        return getMemoryProperties() & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    }
-
-    bool isMappable() const
-    {
-        return getMemoryProperties() & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-    }
-
-    VkMemoryPropertyFlags getMemoryProperties() const
-    {
-        VkMemoryPropertyFlags d;
-        vmaGetAllocationMemoryProperties(allocator, allocation, &d);
-        return d;
-    }
-
     static auto _roundUp(size_t numToRound, size_t multiple) -> size_t
     {
         //assert(multiple);
@@ -773,13 +819,7 @@ struct BufferInfo
     };
 protected:
     VkBuffer                                  buffer         = VK_NULL_HANDLE;
-    VmaAllocation                             allocation     = nullptr;
-    VmaAllocationInfo                         allocationInfo = {};
-    VmaAllocator                              allocator;
-    VmaAllocationCreateInfo                   allocationCreateInfo = {};
-    VkBufferCreateInfo                        bufferInfo           = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-    void *                                    mapped               = nullptr;
-    std::shared_ptr<SharedData>               sharedData;
+    VkBufferCreateInfo                        bufferInfo     = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
     friend class MemoryCache;
 
     VkDeviceSize     m_itr    = 0;

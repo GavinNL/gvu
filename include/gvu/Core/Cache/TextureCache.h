@@ -539,10 +539,10 @@ protected:
         ImageInfo I;
         I.image      = image;
         I.info       = imageInfo;
-        I.allocInfo  = allocInfo;
+        I.allocationInfo = allocInfo;
         I.allocation = allocation;
+        I.allocationCreateInfo = allocCInfo;
         I.viewType   = viewType;
-        I.byteSize   = allocInfo.size;
 
         // create a sampler
         {
@@ -584,6 +584,11 @@ protected:
     std::shared_ptr<SharedData>                      m_sharedData;
 };
 
+
+inline VkDevice MemoryInfoBase::getDevice() const
+{
+    return sharedData->commandPool.getDevice();
+}
 
 inline void BufferInfo::setData(void *data, VkDeviceSize byteSize, VkDeviceSize offset)
 {
