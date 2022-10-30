@@ -8,6 +8,9 @@ namespace gvu
 {
 
 /**
+ *
+ * NOTE: THIS IS DEPRECATED. USE TextureArrayManager2
+ *
  * @brief The ImageArrayManager struct
  *
  * The ImageArrayManager manages a set of Arrays of Textures (not TextureArrays) and is meant
