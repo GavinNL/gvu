@@ -61,29 +61,6 @@ namespace gvu
 struct SubBuffer : public BufferBase
 {
     /**
-     * @brief offset
-     * @return
-     *
-     * The aligned offset of the buffer. this should be used for binding
-     */
-    VkDeviceSize offset() const
-    {
-        return m_offset;
-    }
-
-    /**
-     * @brief size
-     * @return
-     *
-     * The size of the usable buffer requested by the
-     * user
-     */
-    VkDeviceSize size() const
-    {
-        return m_size;
-    }
-
-    /**
      * @brief allocationSize
      * @return
      *
@@ -121,16 +98,38 @@ struct SubBuffer : public BufferBase
      * @brief shaderStorageArrayStartIndex
      * @return
      *
+     * If this SubBuffer was allocated from a BufferMemory
+     * and is meant to hold objects of specific typpe (eg matrices)
+     *
+     *                            <-  SubBuffer  ->
+     * BufferMemory: [           | ob1, obj2, obj3 |                    ]
+     *
+     *
+     * Then, if the BufferMemoy was bound as a storage buffer
+     * the value
+     *
+     *   index = shaderStorageArrayStartIndex();
+     *
+     * can be used to get the first object in the shader. You
+     * will have to pass `index` in as a push constant or some
+     * other method
+     *
+     * layout(set=0, binding = 0) buffer readonly s_Object_t
+     * {
+     *     Object_t data[];
+     * } s_ObjectIn;
+     *
+     *
+     * // get obj1
+     * s_ObjectIn.data[index + 0]
+     *
      */
     uint32_t shaderStorageArrayStartIndex() const
     {
         return offset() / alignment();
     }
 
-    void * mapData()
-    {
-        return static_cast<uint8_t*>(m_handle->mapData()) + offset();
-    }
+
 protected:
     // the actual buffer size and the offset
     // from the host buffer
@@ -138,8 +137,6 @@ protected:
     VkDeviceSize m_allocationSize = 0;
 
     // the usable location
-    VkDeviceSize m_offset    = 0;
-    VkDeviceSize m_size      = 0;
     VkDeviceSize m_alignment = 1;
     friend class SubBufferManager;
 };
@@ -308,6 +305,7 @@ public:
             --it;
         }
     }
+
     /**
      *
      * Allocate a buffer using a specifc type. This is

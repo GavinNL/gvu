@@ -736,7 +736,7 @@ inline VkSampler ImageInfo::getOrCreateSampler(VkSamplerCreateInfo c)
     return sharedData->samplerCache.create(c);
 }
 
-inline void ImageInfo::copyData(void * data, uint32_t width, uint32_t height,
+inline void ImageInfo::copyData(void const * data, uint32_t width, uint32_t height,
                          uint32_t arrayLayer, uint32_t mipLevel,
                          uint32_t x_ImageOffset, uint32_t y_ImageOffset)
 {

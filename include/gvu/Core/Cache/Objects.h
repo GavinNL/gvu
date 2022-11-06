@@ -26,6 +26,7 @@ namespace gvu
 
 struct SharedData;
 
+
 struct MemoryInfoBase
 {
 public:
@@ -82,9 +83,9 @@ public:
         return getMemoryProperties() & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
     }
 
-    void flush()
+    void flush(VkDeviceSize _offset = 0, VkDeviceSize _size = VK_WHOLE_SIZE)
     {
-        vmaFlushAllocation(allocator, allocation, 0, VK_WHOLE_SIZE);
+        vmaFlushAllocation(allocator, allocation, _offset, _size);
     }
 
     /**
@@ -136,6 +137,7 @@ struct ImageViewRange
         return std::tie(layer,layerCount, mip, mipCount,viewType) < std::tie(r.layer, r.layerCount, r.mip, r.mipCount, viewType);
     }
 };
+
 
 struct ImageInfo : public MemoryInfoBase
 {
@@ -233,7 +235,7 @@ struct ImageInfo : public MemoryInfoBase
      * the image data will be copied
      * and the image layer/level will be transitioned to SHADER_READ_ONLY_OPTIMAL
      */
-    void copyData(void * data, uint32_t width, uint32_t height,
+    void copyData(const void *data, uint32_t width, uint32_t height,
                   uint32_t arrayLevel = 0, uint32_t mipLevel = 0,
                   uint32_t x_ImageOffset=0, uint32_t y_ImageOffset=0);
 
@@ -764,6 +766,16 @@ protected:
 };
 
 
+/**
+ * @brief The BufferInfo class
+ *
+ * This class represents the lowest level buffer. It
+ * is a wrapper around VkBuffer and its memory.
+ *
+ * You can use it on its own, but its better used as
+ * a backend for the SubBufferManager since that can
+ * allocate sections within a buffer.
+ */
 struct BufferInfo : public MemoryInfoBase
 {
     /**
@@ -800,6 +812,11 @@ struct BufferInfo : public MemoryInfoBase
      * Reallocate the data
      */
     void resize(VkDeviceSize bytes);
+
+    VkBufferUsageFlags bufferUsage() const
+    {
+        return bufferInfo.usage;
+    }
 
     template<typename T>
     uint32_t pushStorage(T const *v, size_t count)
@@ -856,10 +873,16 @@ using TextureHandle   = std::shared_ptr<ImageInfo>;
 using WTextureHandle  = std::weak_ptr<ImageInfo>;
 
 /**
+ * BufferMemory is meant to be the lowest level
+ * Buffer object. This is a wrapper around VkBuffer
+ */
+using BufferMemory   = std::shared_ptr<BufferInfo>;
+
+/**
  * @brief The BufferBase class
  *
  * A base class used for higher level objects
- * that are backed by buffers
+ * that are backed by BufferObjects
  */
 struct BufferBase
 {
@@ -876,8 +899,44 @@ struct BufferBase
         return m_handle->getBuffer();
     }
 
+    VkBufferUsageFlags bufferUsage() const
+    {
+        return m_handle->bufferUsage();
+    }
+
+    /**
+     * @brief size
+     * @return
+     *
+     * Returns the usable size of this buffer. This value is NOT
+     * the same as the size of the allocated buffer object.
+     *
+     */
+    VkDeviceSize size() const
+    {
+        return m_size;
+    }
+
+    /**
+     * @brief offset
+     * @return
+     *
+     * Returns the offset from the start of the allocated VKBuffer
+     */
+    VkDeviceSize offset() const
+    {
+        return m_offset;
+    }
+    void * mapData()
+    {
+        return static_cast<uint8_t*>(m_handle->mapData()) + offset();
+    }
+
+
 protected:
-    BufferHandle m_handle;
+    BufferMemory m_handle;
+    VkDeviceSize m_offset = 0;
+    VkDeviceSize m_size   = 0;
 };
 
 }
