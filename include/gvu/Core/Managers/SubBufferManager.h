@@ -4,6 +4,7 @@
 #include "../Cache/Objects.h"
 #include <set>
 #include <list>
+
 namespace gvu
 {
 
@@ -161,6 +162,7 @@ public:
         }
         m_allocations.clear();
     }
+
     /**
      * @brief setBuffer
      * @param h
@@ -216,7 +218,7 @@ public:
         // bump the size requirements to be multiples of the alignment
         //s = BufferInfo::_roundUp(s, alignment);
         //s = s % alignment == 0 ? s : (s/alignment+1)*alignment;
-
+        mergeFreeAllocations();
         assert(m_allocations.size() > 0);
         for(auto it=std::prev(m_allocations.end()); ;)
         {
@@ -265,6 +267,7 @@ public:
                     return B;
                 }
             }
+
             if( it == m_allocations.begin())
                 break;
             --it;

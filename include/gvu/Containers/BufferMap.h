@@ -449,6 +449,14 @@ struct BufferMap : protected BufferVector<_Value, BufferHandle>
     {
         return buffer_vector_type::at(index.index);
     }
+    value_type& atIndex(size_t index)
+    {
+        return buffer_vector_type::at(index);
+    }
+    value_type const & atIndex(size_t index) const
+    {
+        return buffer_vector_type::at(index);
+    }
     /**
      * @brief remove
      * @param k
@@ -489,6 +497,23 @@ struct BufferMap : protected BufferVector<_Value, BufferHandle>
     size_t capacity() const
     {
         return maxSize();
+    }
+
+    auto begin()
+    {
+        return m_keyToIndex.begin();
+    }
+    auto begin() const
+    {
+        return m_keyToIndex.begin();
+    }
+    auto end()
+    {
+        return m_keyToIndex.end();
+    }
+    auto end() const
+    {
+        return m_keyToIndex.end();
     }
 protected:
     size_t maxSize() const

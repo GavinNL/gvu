@@ -2,6 +2,8 @@
 #define GVU_IMGUI_WIDGETS_H
 
 #include "../Core/Managers/SubBufferManager.h"
+#include "../Advanced/VulkanApplicationContext.h"
+
 #include <imgui.h>
 
 namespace gvu
@@ -86,6 +88,21 @@ inline void drawCubeFaces(gvu::TextureHandle h, uint32_t mip, float w = ImGui::G
     ImGui::Dummy(imgSize);
 
     ImGui::PopStyleVar(1);
+}
+
+inline void drawContextInfo(std::shared_ptr<VulkanApplicationContext> m_context)
+{
+    ImGui::Text("Allocated Buffers       : %d", static_cast<int>(m_context->memoryCache.getAllocatedBufferCount()));
+    ImGui::Text("Allocated Textures      : %d", static_cast<int>(m_context->memoryCache.getAllocatedTextureCount()));
+    ImGui::Text("Command Pools           : %d", static_cast<int>(m_context->commandPoolManager.getCommandPoolCount()));
+    ImGui::Text("Active Command Buffers  : %d", static_cast<int>(m_context->commandPoolManager.getActiveCommandBufferCount()));
+    ImGui::Text("Returned Command Buffers: %d", static_cast<int>(m_context->commandPoolManager.getReturnedCommandBufferCount()));
+    ImGui::Text("Allocated Textures      : %d", static_cast<int>(m_context->memoryCache.getAllocatedTextureCount()));
+    ImGui::Text("Descriptor Set Layouts  : %d", static_cast<int>(m_context->descriptorSetLayoutCache.cacheSize()));
+    ImGui::Text("RenderPasses            : %d", static_cast<int>(m_context->renderPassCache.cacheSize()));
+    ImGui::Text("Samplers                : %d", static_cast<int>(m_context->samplerCache.cacheSize()));
+    ImGui::Text("Descriptor Pools        : %d", static_cast<int>(m_context->descriptorSetAllocator.descriptorPoolCount()));
+    ImGui::Text("Allocated Sets          : %d", static_cast<int>(m_context->descriptorSetAllocator.descriptorSetCount()));
 }
 
 }

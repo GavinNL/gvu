@@ -83,6 +83,11 @@ struct TextureArrayManager2
             + c.imageCube.update(c.set, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     }
 
+    VkDescriptorSet getDescriptorSet() const
+    {
+        return m_chain[m_currentChainIndex].set;
+    }
+
     void nextSet()
     {
         m_currentChainIndex = (m_currentChainIndex+1) % m_chain.size();
