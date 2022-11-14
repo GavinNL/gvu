@@ -34,8 +34,9 @@ struct DynamicRenderingFrameBuffer
         {
             setRenderArea(0,0, h->getExtents().width, h->getExtents().height);
         }
-        colorImages.resize( std::max<size_t>(attachmentIndex,colorImages.size()+1), {});
-        colorAttachments.resize( std::max<size_t>(attachmentIndex,colorAttachments.size()+1), {});
+
+        colorImages.resize( std::max<size_t>(attachmentIndex+1,colorImages.size()), {});
+        colorAttachments.resize( std::max<size_t>(attachmentIndex+1,colorAttachments.size()), {});
 
         colorImages.at(attachmentIndex) = h;
         auto & colorAttachment = colorAttachments.at(attachmentIndex);
@@ -70,6 +71,7 @@ struct DynamicRenderingFrameBuffer
     {
         return depthImage;
     }
+
     auto getColorAttachmentImage(uint32_t index) const
     {
         return colorImages.at(index);

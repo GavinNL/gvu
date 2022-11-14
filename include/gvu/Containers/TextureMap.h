@@ -33,15 +33,47 @@ namespace gvu
  */
 struct TextureMap
 {
+    /**
+     * @brief init
+     * @param maxTextures
+     * @param nullTexture
+     *
+     * Initialize the texture map with a specific size. You
+     * should not change this size after it has been created.
+     *
+     * The maxTexture should be the same size as the array of
+     * textures you plan on using in your shader, eg:
+     *
+     * layout (set = 1, binding = 0) uniform sampler2D   u_TextureArray[32];
+     *
+     * You must also pass it a null texture, this is a texture that will
+     * be used when are no other textures in the array. This can be a
+     * small white texture if you like
+     */
     void init(size_t maxTextures, gvu::TextureHandle nullTexture)
     {
         m_textures.resize(maxTextures, nullTexture);
+        m_textureInfo.resize(maxTextures);
+
         for(uint32_t i=0;i<m_textures.size();i++)
         {
+            auto & d = m_textureInfo[i];
+            d.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            d.sampler     = m_textures[i]->getLinearSampler();
+            d.imageView   = m_textures[i]->getImageView();
             m_needsUpdate.push_back(i);
+
+            m_freeIndices.push_back(maxTextures-1-i);
         }
+        assert(m_freeIndices.back() == 0);
+        m_freeIndices.pop_back();
     }
 
+    /**
+     * @brief destroy
+     *
+     * Clears all the textures releasing their shared pointers
+     */
     void destroy()
     {
         *this = {};
@@ -53,13 +85,17 @@ struct TextureMap
      * Removes a texture at the particular index.
      * i must be > 0. You cannot remove the null
      * texure.
+     *
+     * The texture will be replaced with the null texture
      */
     void removeTexture(uint32_t i)
     {
         assert(i!=0);
         m_textureToIndex.erase( m_textures[i] );
         m_textures[i] = m_textures[0];
+        m_textureInfo[i] = m_textureInfo[0];
         m_needsUpdate.push_back(i);
+        m_freeIndices.push_back(i);
     }
 
     /**
@@ -80,11 +116,15 @@ struct TextureMap
     /**
      * @brief removeTexture
      * @param t
+     *
+     * Removes a texture from the array given the texture's handle
+     *
      */
     void removeTexture(gvu::TextureHandle const & t)
     {
         auto i = getIndex(t);
-        removeTexture(i);
+        if(i>0)
+            removeTexture(i);
     }
 
     /**
@@ -100,16 +140,46 @@ struct TextureMap
     {
         assert(t->getImageViewType() == m_textures[0]->getImageViewType());
 
-        for(uint32_t i=1; i<m_textures.size();i++)
-        {
-            if(m_textures[i] == m_textures.front())
-            {
-                m_textures[i] = t;
-                m_needsUpdate.push_back(i);
-                return i;
-            }
-        }
-        return 0;
+        auto it = m_textureToIndex.find(t);
+        if(it != m_textureToIndex.end())
+            return it->second;
+
+        assert(m_freeIndices.size() > 0);
+
+        auto i = m_freeIndices.back();
+        m_freeIndices.pop_back();
+
+        assert(m_textures[i] == m_textures.front());
+
+        m_textures[i] = t;
+        m_textureInfo[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        m_textureInfo[i].sampler     = m_textures[i]->getLinearSampler();
+        m_textureInfo[i].imageView   = m_textures[i]->getImageView();
+
+        m_needsUpdate.push_back(i);
+        m_textureToIndex[t] = i;
+
+        //for(uint32_t i=1; i<m_textures.size();i++)
+        //{
+        //    if(m_textures[i] == m_textures.front())
+        //    {
+        //        m_textures[i] = t;
+        //        m_textureInfo[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        //        m_textureInfo[i].sampler     = m_textures[i]->getLinearSampler();
+        //        m_textureInfo[i].imageView   = m_textures[i]->getImageView();
+        //        m_needsUpdate.push_back(i);
+        //        m_textureToIndex[t] = i;
+        //        return i;
+        //    }
+        //}
+        return i;
+    }
+
+
+    void setSampler(uint32_t i, VkFilter filter, VkSamplerAddressMode addressMode)
+    {
+        m_textureInfo[i].sampler = m_textures[i]->getSampler(filter, addressMode);
+        m_needsUpdate.push_back(i);
     }
 
     /**
@@ -140,31 +210,25 @@ struct TextureMap
      * @param s
      * @param binding
      *
-     * Update a descriptor set with all the dirty
+     * Update all the texures that have been flagged as dirty
+     *
      */
     uint32_t update(VkDescriptorSet s, uint32_t binding, VkDescriptorType ty)
     {
         if(m_needsUpdate.empty())
             return 0;
 
-        std::vector<VkWriteDescriptorSet> m_write;
-        std::vector<VkDescriptorImageInfo> imageWrites;
+        std::vector<VkWriteDescriptorSet> writeSet;
 
         std::sort(m_needsUpdate.begin(), m_needsUpdate.end());
         auto it = std::unique(m_needsUpdate.begin(), m_needsUpdate.end());
         m_needsUpdate.erase(it, m_needsUpdate.end());
 
-        imageWrites.reserve(m_needsUpdate.size());
-        m_write.reserve(m_needsUpdate.size());
+        writeSet.reserve(m_needsUpdate.size());
 
         for(auto i : m_needsUpdate)
         {
-            auto & d = imageWrites.emplace_back();
-            d.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            d.sampler     = m_textures[i]->getLinearSampler();
-            d.imageView   = m_textures[i]->getImageView();
-
-            auto & w = m_write.emplace_back();
+            auto & w = writeSet.emplace_back();
             w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             w.pNext = nullptr;
             w.dstSet = s;
@@ -172,18 +236,22 @@ struct TextureMap
             w.dstArrayElement = i;
             w.dstBinding = binding;
             w.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            w.pImageInfo = &d;
+            w.pImageInfo = &m_textureInfo[i];
         }
 
         auto device = m_textures[0]->getDevice();
-        vkUpdateDescriptorSets(device, uint32_t(m_write.size()), &m_write[0], 0, nullptr);
-        m_needsUpdate.clear();
-        return uint32_t(m_write.size());
-    }
+        vkUpdateDescriptorSets(device, uint32_t(writeSet.size()), &writeSet[0], 0, nullptr);
 
+        m_needsUpdate.clear();
+
+        return uint32_t(writeSet.size());
+    }
+protected:
     std::vector<gvu::TextureHandle>        m_textures;
+    std::vector<VkDescriptorImageInfo>     m_textureInfo;
     std::unordered_map<gvu::TextureHandle, uint32_t> m_textureToIndex;
     std::vector<uint32_t>                  m_needsUpdate;
+    std::vector<uint32_t>                  m_freeIndices;
 };
 
 

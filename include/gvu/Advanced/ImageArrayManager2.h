@@ -93,6 +93,49 @@ struct TextureArrayManager2
         m_currentChainIndex = (m_currentChainIndex+1) % m_chain.size();
     }
 
+    void setTextureCubeSampler(uint32_t i, VkFilter filter, VkSamplerAddressMode addressMode)
+    {
+        for(auto & c : m_chain)
+        {
+            c.imageCube.setSampler(i, filter ,addressMode);
+        }
+    }
+    void setTextureSampler(uint32_t i, VkFilter filter, VkSamplerAddressMode addressMode)
+    {
+        for(auto & c : m_chain)
+        {
+            c.images2D.setSampler(i, filter ,addressMode);
+        }
+    }
+    uint32_t getTextureCubeIndex(gvu::TextureHandle const &t) const
+    {
+        auto & c = m_chain[m_currentChainIndex];
+        return c.imageCube.getIndex(t);
+    }
+    uint32_t getTexture2DIndex(gvu::TextureHandle const &t) const
+    {
+        auto & c = m_chain[m_currentChainIndex];
+        return c.images2D.getIndex(t);
+    }
+
+    uint32_t insertTextureCube(gvu::TextureHandle const &t)
+    {
+        for(auto & c : m_chain)
+        {
+            c.imageCube.insertTexture(t);
+        }
+        return getTextureCubeIndex(t);
+    }
+
+    uint32_t insertTexture(gvu::TextureHandle const &t)
+    {
+        for(auto & c : m_chain)
+        {
+            c.images2D.insertTexture(t);
+        }
+        return getTexture2DIndex(t);
+    }
+
 protected:
     std::shared_ptr<VulkanApplicationContext> m_context;
     std::vector<Chain_t>                      m_chain;
