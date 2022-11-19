@@ -403,7 +403,124 @@ struct ImageInfo : public MemoryInfoBase
 
     //=====================================================================================================================
 
+    void generateMipMap(VkCommandBuffer c, uint32_t arrayLayer, VkImageLayout mip0CurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+    {
+        VkExtent3D srcExtents = getExtents();
+        VkExtent3D dstExtents = getExtents();
+        VkOffset3D srcOffset = {};
+        VkOffset3D dstOffset = {};
 
+        if(getMipLevels() <= 1)
+            return;
+
+        VkImageSubresourceRange lowerLevel = {};
+        lowerLevel.aspectMask   = VK_IMAGE_ASPECT_COLOR_BIT;
+        lowerLevel.baseMipLevel = 0;
+        lowerLevel.levelCount   = 1;
+        lowerLevel.layerCount   = 1;
+
+        auto allLevels = lowerLevel;
+        allLevels.levelCount = getMipLevels();
+
+
+        if( mip0CurrentLayout != VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
+        {
+            auto level0 = lowerLevel;
+            level0.baseMipLevel = 0;
+            // Transition the upper level to transfer SRC
+            insert_image_memory_barrier(c,
+                                        getImage(),
+                                        VK_ACCESS_TRANSFER_WRITE_BIT,
+                                        VK_ACCESS_TRANSFER_READ_BIT,
+                                        mip0CurrentLayout,
+                                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                        VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                        VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                        level0);
+        }
+
+
+
+
+        for(uint32_t m=1;m<getMipLevels();m++)
+        {
+            lowerLevel.baseMipLevel = m;
+
+            // Transition the upper level to transfer SRC
+            insert_image_memory_barrier(c,
+                                        getImage(),
+                                        0,
+                                        VK_ACCESS_TRANSFER_WRITE_BIT,
+                                        VK_IMAGE_LAYOUT_UNDEFINED,
+                                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                        VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                        VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                        lowerLevel);
+
+
+            dstExtents.width  = srcExtents.width  >> 1;
+            dstExtents.height = srcExtents.height >> 1;
+            dstExtents.depth  = 1;//srcExtents.depth << 1;
+
+
+            {
+                VkImageBlit region = {};
+                region.srcSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+                region.srcSubresource.baseArrayLayer = arrayLayer;
+                region.srcSubresource.layerCount     = 1;
+                region.srcSubresource.mipLevel       = m-1;
+
+                region.dstSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+                region.dstSubresource.baseArrayLayer = arrayLayer;
+                region.dstSubresource.layerCount     = 1;
+                region.dstSubresource.mipLevel       = m;
+
+                region.srcOffsets[0].x = srcOffset.x;//width;
+                region.srcOffsets[0].y = srcOffset.y;//height;
+                region.srcOffsets[0].z = srcOffset.z;//depth;
+
+                region.dstOffsets[0].x = dstOffset.x;//width;
+                region.dstOffsets[0].y = dstOffset.y;//height;
+                region.dstOffsets[0].z = dstOffset.z;//depth;
+
+                region.srcOffsets[1].x = srcExtents.width + srcOffset.x;//width;
+                region.srcOffsets[1].y = srcExtents.height + srcOffset.y;//height;
+                region.srcOffsets[1].z = srcExtents.depth + srcOffset.z;//depth;
+                region.dstOffsets[1].x = dstExtents.width + dstOffset.x;//width;
+                region.dstOffsets[1].y = dstExtents.height + dstOffset.y;//height;
+                region.dstOffsets[1].z = dstExtents.depth + dstOffset.z;//depth;
+
+                vkCmdBlitImage(c,
+                               this->getImage(),
+                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                               this->getImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region,VK_FILTER_LINEAR);
+            }
+
+            // transition the lower level into transfer SRC
+            insert_image_memory_barrier(c,
+                                        getImage(),
+                                        VK_ACCESS_TRANSFER_WRITE_BIT,
+                                        VK_ACCESS_TRANSFER_READ_BIT,
+                                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                        VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                        VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                        lowerLevel);
+
+            srcExtents = dstExtents;
+        }
+
+
+        insert_image_memory_barrier(c,
+                                    getImage(),
+                                    VK_ACCESS_TRANSFER_READ_BIT,
+                                    VK_ACCESS_SHADER_READ_BIT,
+                                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                    VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                    allLevels);
+    }
 
     void transition(VkCommandBuffer c,
                     VkImageLayout oldLayout, VkImageLayout newLayout,
@@ -732,6 +849,7 @@ protected:
     VkCommandBuffer m_updateCommandBuffer = VK_NULL_HANDLE;
     friend class MemoryCache;
 
+public:
     static void insert_image_memory_barrier(
         VkCommandBuffer         command_buffer,
         VkImage                 image,
