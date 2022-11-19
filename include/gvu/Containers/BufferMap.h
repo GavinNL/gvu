@@ -225,6 +225,7 @@ struct BufferVector
         #endif
 
         uint32_t _srcOffset = h->offset();
+
         std::sort(m_pushDirty.begin(), m_pushDirty.end());
         auto _end = std::unique(m_pushDirty.begin(), m_pushDirty.end());
 
@@ -244,11 +245,10 @@ struct BufferVector
             auto & r = regions.emplace_back();
 
             r.srcOffset = _srcOffset;
-            r.dstOffset = *i * sizeof(value_type);
+            r.dstOffset = (*i) * sizeof(value_type);
             r.size      = sizeof(value_type) * objectsToCopy;
 
             #if defined mockCopy
-                std::cout << "srcByte: " << _srcOffset << "   dstByte: " << r.dstOffset << "   byteCount: " << r.size << std::endl;
             #endif
             _mapped    += r.size;
             _srcOffset += r.size;
@@ -354,6 +354,7 @@ struct BufferMap : protected BufferVector<_Value, BufferHandle>
     {
         buffer_vector_type::pushDirty(cmd, h);
     }
+
     /**
      * @brief insert
      * @param k
@@ -432,13 +433,13 @@ struct BufferMap : protected BufferVector<_Value, BufferHandle>
      */
     value_type& atKey(key_type const & k)
     {
-        auto id = buffer_vector_type::find(k);
-        buffer_vector_type::at(id.index);
+        auto id = find(k);
+        return this->buffer_vector_type::at(id.index);
     }
     value_type const& atKey(key_type const & k) const
     {
-        auto id = buffer_vector_type::find(k);
-        buffer_vector_type::at(id.index);
+        auto id = this->buffer_vector_type::find(k);
+        return this->buffer_vector_type::at(id.index);
     }
 
     value_type& atIndex(storage_index<value_type> index)
@@ -464,14 +465,21 @@ struct BufferMap : protected BufferVector<_Value, BufferHandle>
      *
      * Removes the value associated with the key.
      * The index will be reused for the next key that
-     * gets inserted
+     * gets inserted.
+     *
+     * The object will be re-initialized with default
+     * constructed values and it wil be set to dirty
+     * so that it will be updated during the next update call
      */
     bool remove(key_type const & k)
     {
         auto it = m_keyToIndex.find(k);
         if(it == m_keyToIndex.end())
             return false;
-        m_availableIndex.push_back(it->second->second);
+
+        atIndex(it->second) = {};
+        setDirty(it->second);
+        m_availableIndex.push_back(it->second);
         m_keyToIndex.erase(it);
         return true;
     }
@@ -499,6 +507,10 @@ struct BufferMap : protected BufferVector<_Value, BufferHandle>
         return maxSize();
     }
 
+    size_t availableIndices() const
+    {
+        return m_availableIndex.size();
+    }
     auto begin()
     {
         return m_keyToIndex.begin();
