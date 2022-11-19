@@ -220,6 +220,9 @@ inline void GraphicsPipeline::build()
     createInfo.dynamicStates.push_back(VK_DYNAMIC_STATE_VIEWPORT);
     createInfo.dynamicStates.push_back(VK_DYNAMIC_STATE_SCISSOR);
 
+    std::sort(createInfo.dynamicStates.begin(),createInfo.dynamicStates.end());
+    auto it = std::unique(createInfo.dynamicStates.begin(),createInfo.dynamicStates.end());
+    createInfo.dynamicStates.erase(it, createInfo.dynamicStates.end());
     //createInfo.dynamicStates.push_back(VK_DYNAMIC_STATE_CULL_MODE);
     //createInfo.dynamicStates.push_back(VK_DYNAMIC_STATE_FRONT_FACE);
     //createInfo.dynamicStates.push_back(VK_DYNAMIC_STATE_PRIMITIVE_TOPOLOGY);
@@ -254,6 +257,7 @@ inline void GraphicsPipeline::build()
 inline void ComputePipeline::destroy()
 {
     vkDestroyPipeline(context->getDevice(), pipeline, nullptr);
+    computeStage.destroy();
 }
 
 inline void ComputePipeline::build()
@@ -307,7 +311,7 @@ inline VkShaderModule PipelineBase::_createShader(std::vector<uint32_t> code)
 
 inline void ShaderStage::destroy()
 {
-    if(module)
+    if(module != VK_NULL_HANDLE)
     {
         vkDestroyShaderModule(context->getDevice(), module, nullptr);
         module = VK_NULL_HANDLE;

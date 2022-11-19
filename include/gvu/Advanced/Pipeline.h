@@ -179,6 +179,7 @@ struct ComputePipeline : public PipelineBase
         computeStage.addCompileTimeDefinition("VULKAN_STAGE", "FRAGMENT");
         createInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
     }
+
     VkPipelineLayout getPipelineLayout() const
     {
         return createInfo.layout;
@@ -255,6 +256,8 @@ public:
     std::shared_ptr<GraphicsPipeline> clone() const
     {
         auto p = std::make_shared<GraphicsPipeline>(*this);
+        p->vertexStage.module = VK_NULL_HANDLE;
+        p->fragmentStage.module = VK_NULL_HANDLE;
         p->pipeline = VK_NULL_HANDLE;
         return p;
     }
