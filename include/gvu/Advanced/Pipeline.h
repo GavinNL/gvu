@@ -66,6 +66,8 @@ struct ShaderStage
 
     }
     ~ShaderStage();
+
+    void destroy();
     /**
      * @brief loadVertexGLSL
      * @param p

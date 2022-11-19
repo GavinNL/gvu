@@ -169,7 +169,14 @@ inline VkShaderModule ShaderStage::getModule()
 
 inline void GraphicsPipeline::destroy()
 {
-    vkDestroyPipeline(context->getDevice(), pipeline, nullptr);
+    if(pipeline != VK_NULL_HANDLE)
+    {
+        vkDestroyPipeline(context->getDevice(), pipeline, nullptr);
+        pipeline = VK_NULL_HANDLE;
+        vertexStage.destroy();
+        fragmentStage.destroy();
+    }
+
 }
 
 inline void GraphicsPipeline::build()
@@ -298,13 +305,18 @@ inline VkShaderModule PipelineBase::_createShader(std::vector<uint32_t> code)
     return sh;
 }
 
-inline ShaderStage::~ShaderStage()
+inline void ShaderStage::destroy()
 {
     if(module)
     {
         vkDestroyShaderModule(context->getDevice(), module, nullptr);
         module = VK_NULL_HANDLE;
     }
+}
+
+inline ShaderStage::~ShaderStage()
+{
+    destroy();
 }
 
 
