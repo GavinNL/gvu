@@ -36,13 +36,41 @@ struct storage_index
  *
  * The buffer can be host visible or GPU only. If the bufer is
  * GPU only, the vector will allocate a std::vector internally
- * in host memory
+ * in host memory.
+ *
+ * if includeMetaData is set to false, then
+ * In the shader, your definition must look like this:
+ *
+ * layout(set=SET, binding=BINDING) buffer readonly s_Type
+ * {
+ *     s_Type data[];
+ * } NAME;
+ *
+ * if includeMetaData is set to true, then
+ * In the shader, your definition must look like this:
+ *
+ * layout(set=SET, binding=BINDING) buffer readonly s_Type
+ * {
+ *     uint   size;
+ *     uint   capacity;
+ *     uint   sizeofValueType
+ *     uint   unused;
+ *     s_Type data[];
+ * } NAME;
+ *
  */
-template<typename _Value, typename _bufferHandleType=BufferHandle>
+template<typename _Value, typename _bufferHandleType=BufferHandle, bool includeMetaData=false>
 struct BufferVector
 {
     using value_type  = _Value;
     using buffer_type = _bufferHandleType;
+    struct metadata_type
+    {
+        uint32_t m_size;
+        uint32_t m_capacity;
+        uint32_t m_sizeOfValueType = 0;
+        uint32_t unused1 = 0;
+    };
 
     bool _isMappable = false;
 
@@ -70,7 +98,7 @@ struct BufferVector
      */
     size_t capacity() const
     {
-        return m_buffer->getBufferSize() / sizeof(value_type);
+        return (m_buffer->getBufferSize() - metaDataSize()) / sizeof(value_type);
     }
 
     /**
@@ -134,7 +162,9 @@ struct BufferVector
         }
         else
         {
-            m_buffer->setData( m_hostData[index], index);
+            //void setData(void *data, VkDeviceSize byteSize, VkDeviceSize offset);
+            m_buffer->setData( &m_hostData[index], sizeof(value_type), sizeof(value_type)*index + metaDataSize());
+            //m_buffer->setData( m_hostData[index], index);
         }
     }
 
@@ -197,9 +227,18 @@ struct BufferVector
      */
     VkDeviceSize requiredStagingBufferSize() const
     {
-        return m_pushDirty.size() * sizeof(value_type);
+        auto s = m_pushDirty.size() * sizeof(value_type);
+        return s==0 ? s : (s+metaDataSize());
     }
 
+    static VkDeviceSize metaDataSize()
+    {
+        if constexpr (includeMetaData)
+        {
+            return sizeof(metadata_type);
+        }
+        return 0;
+    }
     /**
      * @brief pushDirty
      * @param cmd
@@ -224,6 +263,16 @@ struct BufferVector
         auto _mapped = static_cast<uint8_t*>(h->mapData());
         #endif
 
+        metadata_type _metaData;
+
+        uint32_t metaDataOffset = 0;
+        if constexpr (includeMetaData)
+        {
+            metaDataOffset       = sizeof(_metaData);
+            _metaData.m_size     = uint32_t(m_hostData.size());
+            _metaData.m_capacity = uint32_t(m_hostData.capacity());
+            _metaData.m_sizeOfValueType = uint32_t(sizeof(value_type));
+        }
         uint32_t _srcOffset = h->offset();
 
         std::sort(m_pushDirty.begin(), m_pushDirty.end());
@@ -245,7 +294,7 @@ struct BufferVector
             auto & r = regions.emplace_back();
 
             r.srcOffset = _srcOffset;
-            r.dstOffset = (*i) * sizeof(value_type);
+            r.dstOffset = (*i) * sizeof(value_type) + metaDataOffset;
             r.size      = sizeof(value_type) * objectsToCopy;
 
             #if defined mockCopy
@@ -253,6 +302,15 @@ struct BufferVector
             _mapped    += r.size;
             _srcOffset += r.size;
         });
+
+        if constexpr (includeMetaData)
+        {
+            std::memcpy(_mapped, &_metaData, sizeof(_metaData));
+            auto & r = regions.emplace_back();
+            r.srcOffset = _srcOffset;
+            r.dstOffset = 0;
+            r.size      = sizeof(_metaData);
+        }
 
         #if defined mockCopy
         #else
@@ -328,12 +386,12 @@ protected:
  *
  *
  */
-template<typename _Key, typename _Value>
-struct BufferMap : protected BufferVector<_Value, BufferHandle>
+template<typename _Key, typename _Value, bool includeMetaData=false>
+struct BufferMap : protected BufferVector<_Value, BufferHandle, includeMetaData>
 {
     using key_type = _Key;
     using value_type = _Value;
-    using buffer_vector_type = BufferVector<_Value, BufferHandle>;
+    using buffer_vector_type = BufferVector<_Value, BufferHandle, includeMetaData>;
 
     BufferMap()
     {

@@ -906,12 +906,12 @@ struct BufferInfo : public MemoryInfoBase
      */
     void setData(void *data, VkDeviceSize byteSize, VkDeviceSize offset);
 
-    template<typename T>
-    void setData(T const & D, size_t index)
-    {
-        auto w = static_cast<unsigned char*>(mapData()) + index*sizeof(D);
-        std::memcpy(w, &D, sizeof(D));
-    }
+    //template<typename T>
+    //void setData(T const & D, size_t index)
+    //{
+    //    auto w = static_cast<unsigned char*>(mapData()) + index*sizeof(D);
+    //    std::memcpy(w, &D, sizeof(D));
+    //}
 
     VkBuffer getBuffer() const
     {
