@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 3.13)
 add_library(${PROJECT_NAME}-catchmain STATIC ${CMAKE_CURRENT_SOURCE_DIR}/catch-main.cpp)
 target_include_directories(${PROJECT_NAME}-catchmain PUBLIC third_party)
 target_compile_features(${PROJECT_NAME}-catchmain PUBLIC cxx_std_17)
-target_link_libraries( ${PROJECT_NAME}-catchmain PUBLIC CONAN_PKG::catch2   )
+target_link_libraries( ${PROJECT_NAME}-catchmain PUBLIC Catch2::Catch2   )
 
 
 set(TESTCASE_PREFIX        "test-${PROJECT_NAME}")
@@ -46,15 +46,15 @@ foreach(file ${files})
     target_link_libraries( ${UNIT_EXE_NAME} 
                                 PUBLIC 
                                     ${PROJECT_NAME}-catchmain 
-                                 #   ${PROJECT_NAME}::warnings
                                     -lstdc++fs
-                                    CONAN_PKG::sdl
-                                    CONAN_PKG::fmt
+                                    SDL2::SDL2
+                                    fmt::fmt
                                     Vulkan::Vulkan
-                                    CONAN_PKG::spirv-cross
-                                    CONAN_PKG::vulkan-memory-allocator
-                                    CONAN_PKG::glslang
-                                    CONAN_PKG::spdlog
+                                    spirv-cross::spirv-cross
+                                    glslang::glslang
+                                  #  CONAN_PKG::spirv-cross
+                                  #  CONAN_PKG::vulkan-memory-allocator
+                                  #  CONAN_PKG::spdlog
                                     gvu::gvu
                                     vkw::vkw)
 

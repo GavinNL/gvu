@@ -68,20 +68,25 @@ SCENARIO( " Scenario 1: Create a Sampler" )
                64, nullCube,
                VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
 
-        std::cout << G.updateDirty() << std::endl;
+        auto t0 = std::chrono::system_clock::now();
+        G.updateDirty();
         G.nextSet();
-        std::cout << G.updateDirty() << std::endl;
-        G.nextSet();
-        std::cout << G.updateDirty() << std::endl;
-        G.nextSet();
-        std::cout << G.updateDirty() << std::endl;
-        G.nextSet();
-        std::cout << G.updateDirty() << std::endl;
-        G.nextSet();
-        std::cout << G.updateDirty() << std::endl;
-        G.nextSet();
-        std::cout << G.updateDirty() << std::endl;
 
+        G.updateDirty();
+        G.nextSet();
+
+        G.updateDirty();
+        G.nextSet();
+
+        G.updateDirty();
+        G.nextSet();
+
+        G.updateDirty();
+        G.nextSet();
+
+        auto t1 = std::chrono::system_clock::now();
+
+        std::cout << "Time to update all chains: " << std::chrono::duration<double>(t1-t0).count() << std::endl;
         G.destroy();
     }
 

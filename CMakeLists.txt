@@ -62,21 +62,18 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/test" AND IS_DIRECTORY "${CMAKE_CURRENT_S
 
     if( ${PROJECT_NAME}_ENABLE_TESTING )
 
-        ################################################################################
-        # If the conan file exists, include it
-        ################################################################################
-        if( EXISTS ${CMAKE_CURRENT_BINARY_DIR}/conanbuildinfo.cmake )
-            include(${CMAKE_CURRENT_BINARY_DIR}/conanbuildinfo.cmake)
-            conan_basic_setup(NO_OUTPUT_DIRS TARGETS)
-        endif()
-        ################################################################################
+        find_package(Vulkan REQUIRED)
+        find_package(SDL2 REQUIRED)
+        find_package(spdlog REQUIRED)
+        find_package(spirv-cross REQUIRED)
+        find_package(glslang REQUIRED)
 
+        find_package(Catch2 REQUIRED)
 
         ################################################################################
         # Build the SDLVulkanWindow as a library so that we can use it for the
         # examples/unit tests
         ################################################################################
-        find_package(Vulkan)
 
         if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party_sym")
             add_subdirectory(third_party_sym/vkw)
