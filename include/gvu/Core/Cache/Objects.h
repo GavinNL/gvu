@@ -923,6 +923,11 @@ struct BufferInfo : public MemoryInfoBase
         return bufferInfo.size;
     }
 
+    VkDeviceSize offset() const
+    {
+        return 0;
+    }
+
     /**
      * @brief resize
      * @param size
